@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+     PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+     "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+ 	
+    <mapper namespace="kr.nshare.scheduler.service.mapper.SchedulerMapper">
+ 	
+ 	<!--  -->
+ 	<select id="selectTrainingDeleteList" parameterType="kr.nshare.scheduler.service.SchedulerVO" resultType="kr.nshare.scheduler.service.SchedulerVO">
+ 			
+		select * from (
+			select * from i_training where del_type='a' and end_date !='' and end_date between '1999-01-01' and #{auto_end_date} and del_flag ='n'
+			union
+			select * from i_training where del_type='m' and end_date !='' and end_date between '1999-01-01' and #{manual_end_date} and del_flag ='n'
+		) as tb 
+ 
+ 	</select>
+ 
+ 	<!-- 사용자 정보 삭제 -->
+ 	<delete id="deleteTrainingUser" parameterType="kr.nshare.scheduler.service.SchedulerVO">
+	 		delete from i_training_user where training_code = #{code}
+ 	</delete>
+ 	
+ 	
+ 	<update id="updateTrainingDelFlag" parameterType="kr.nshare.scheduler.service.SchedulerVO">
+		update i_training set del_flag = #{del_flag}  where code = #{code}		
+ 	</update>
+
+ 	<delete id="deleteTrainingRegister" parameterType="kr.nshare.scheduler.service.SchedulerVO">
+ 		delete from i_training_register where training_code = #{code}
+ 	</delete>
+	
+	<!-- 훈련 서비스 기간이 끝난 설정 조회(로그 입력을 위한 조회)  -->
+	<select id="selectServiceListNotinDate" parameterType="kr.nshare.scheduler.service.SchedulerVO" resultType="kr.nshare.system.service.SystemVO">
+		select 
+				*  
+		from i_training_service 
+		where 
+			service_use = 'Y'
+		and
+			DATE_FORMAT(now(),'%Y%m%d') not between DATE_FORMAT(start_date ,'%Y%m%d') 
+																		and DATE_FORMAT(end_date ,'%Y%m%d')
+ 	</select>
+ 	
+	<!--  훈련 서비스 기간이 지난 서비스 설정 N으로 초기화  -->
+	<update id="updateServiceUseStatus">
+		update i_training_service set 
+			service_use = 'N'
+		where 
+			service_use = 'Y'
+		and
+			DATE_FORMAT(now(),'%Y%m%d') not between DATE_FORMAT(start_date ,'%Y%m%d') 
+																		and DATE_FORMAT(end_date ,'%Y%m%d')
+ 	</update>
+	
+	<!-- 훈련 서비스 설정에 의한 삭제 리스트 조회(서비스 설정인 안된 훈련은 제외)  -->
+	<select id="selectDeleteTrainingListByService" parameterType="kr.nshare.scheduler.service.SchedulerVO" resultType="kr.nshare.training.service.TrainingVO">
+	select * 
+	from 
+	(
+		select 
+				ta.*
+				, (case 
+						when ta.del_type ="m" then
+							passive_del_date
+				 		when ta.del_type ="a" then
+							ahto_del_date
+				 		else
+							''
+					end) as del_date	
+		from 
+		(
+			select 
+				a.*
+				,(case
+			 		when b.auto_del_type = 'Y' and a.service_type ="test" then
+			 			DATE_FORMAT((a.sdate +INTERVAL b.auto_test_del_date DAY),'%Y%m%d')	
+			 		when b.auto_del_type = 'Y' and a.service_type ="real" then
+			 			DATE_FORMAT((a.sdate +INTERVAL b.auto_real_del_date DAY),'%Y%m%d')
+					when b.auto_del_type = 'N' and a.service_type ="test" then
+						DATE_FORMAT((a.sdate +INTERVAL #{manual_end_date} DAY),'%Y%m%d')
+			 		when b.auto_del_type = 'N' and a.service_type ="real" then
+						DATE_FORMAT((a.sdate +INTERVAL  #{auto_end_date} DAY),'%Y%m%d')
+			 		else
+						''
+				end) as ahto_del_date	
+				,(case
+			 		when b.passive_del_type = 'Y' and a.service_type ="test" then
+			 				DATE_FORMAT((a.sdate +INTERVAL b.passive_test_del_date DAY),'%Y%m%d')
+			 		when b.passive_del_type = 'Y' and a.service_type ="real" then
+			 				DATE_FORMAT((a.sdate +INTERVAL b.passive_real_del_date DAY),'%Y%m%d')
+			 		when b.passive_del_type = 'N' and a.service_type ="test" then
+							DATE_FORMAT((a.sdate +INTERVAL #{manual_end_date} DAY),'%Y%m%d')
+			 		when b.passive_del_type = 'N' and a.service_type ="real" then
+							DATE_FORMAT((a.sdate +INTERVAL #{auto_end_date} DAY),'%Y%m%d')
+			 		else
+						''
+				end) as passive_del_date
+			from 
+				i_training as a , i_training_service as b
+			where  
+				a.service_setting_code = b.code		
+		) as ta
+	) tta
+	where 
+		DATE_FORMAT(now(),'%Y%m%d') > DATE_FORMAT(del_date ,'%Y%m%d')
+ 	</select>
+		
+</mapper>

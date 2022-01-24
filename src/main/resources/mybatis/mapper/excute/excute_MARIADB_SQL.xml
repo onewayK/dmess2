@@ -1,0 +1,280 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+     PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+     "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+ 	
+    <mapper namespace="kr.nshare.execute.service.mapper.ExcuteMapper">
+ 	
+ 	
+ 	<!-- 사용자 등록 -->
+ 	<insert id="insertTrainingUserLogExcute"  parameterType="kr.nshare.training.service.TrainingVO">
+ 		insert into i_training_log (training_code, training_user_code , institution_code, sdate) 
+		select 
+			a.code as training_code
+			, b.code as training_user_code
+			, a.institution_code 
+			, now()
+		from i_training as a, i_training_user as b 
+		where 
+			b.training_code = a.code
+		and 
+			a.code = #{code}	
+		<if test='all_send_type =="N"'>	
+			<if test="send_number !=null and send_number != ''">
+				order by rand() desc limit ${send_number} 
+			</if>		
+		</if>	
+			
+ 	</insert>
+ 	
+ 	<!-- log에 등록되어 있는 인원 제외하고 사용자 등록 -->
+ 	<insert id="insertTrainingUserLogExcuteEXcetp"  parameterType="kr.nshare.training.service.TrainingVO">
+ 		insert into i_training_log (training_code, training_user_code , institution_code, sdate,status) 
+		(select 
+			a.code as training_code
+			, b.code as training_user_code
+			, a.institution_code 
+			, now()
+			, 'nosend' as status
+		from i_training as a, i_training_user as b 
+		where 
+			b.training_code = a.code
+		and 
+			a.code = #{code}
+		and
+			b.code not in (		
+							select training_user_code 
+							from i_training_log 
+							where training_code = #{code}
+					)
+		) 			
+ 	</insert>
+ 	
+ 	<update id="updateTrainingStatus" parameterType="kr.nshare.training.service.TrainingVO">
+ 		update i_training set 
+ 			status					 = #{status}
+ 			<if test="status== 'reservation'">
+ 				,reservation_date	 =#{reservation_date}
+ 			</if>
+ 		where
+ 			code = #{code}
+ 	</update>
+ 	
+ 	<!-- 훈련 리스트 출력 -->
+ 	
+ 	<select id="selectExcuteList" parameterType="kr.nshare.training.service.TrainingVO" resultType="kr.nshare.training.service.TrainingVO">
+ 		<![CDATA[
+ 		select  
+	 		c.maxcode
+	 		,a.service_type
+	 		, b.group_name
+			, b.code as group_code
+			, (select institution_name from i_institution where code = b.institution_code) as institution_name 
+			, a.* 
+	    		, (select count(*) from i_training_user where training_code = a.code) as user_cnt 
+	    		, (select approval_type from i_training_approval where training_code = a.code limit 1) as approval_type 
+				, (case
+	    		when a.start_date is null || a.start_date ='' || a.end_date is null || a.end_date ='' then
+	    				'fail'
+				when DATE_FORMAT(a.start_date ,'%Y%m%d%H%i')<=DATE_FORMAT(now(),'%Y%m%d%H%i') and DATE_FORMAT(now(),'%Y%m%d%H%i')<=DATE_FORMAT(a.end_date ,'%Y%m%d%H%i') then
+						'success'
+					else
+						'fail'
+				end) as validation
+			
+   		from i_training as a, i_group as b, (
+																select  b.code, MAX(a.code) as maxcode 
+																from i_training as a, i_group as b 	
+																where
+																	a.ig_code = b.code  
+																group by b.code 
+															) as c 
+    	where
+			a.ig_code = b.code
+			and  b.code= c.code
+		]]>
+		<if test="lev!= 'admin'">
+		and 
+			a.institution_code in (
+				select b.code from i_member as a, i_institution as b, i_auth_mapping as c
+			where
+					a.code = c.member_code
+			and
+					b.code = c.institution_code
+			and
+					a.userid = #{userid}
+			)		   
+		</if>
+    	<if test="searchInstitution != ''">
+		and  a.institution_code = #{searchInstitution}
+		</if> 
+    	<if test="searchKeyword!=null and searchKeyword != ''">
+    		    		
+			<if test="searchCondition=='tname'">	
+				and  a.tname like concat(#{searchKeyword},'%')
+			</if>
+			<if test="searchCondition=='send_name'">	
+				and 
+				(
+					case 
+						when a.type = "0" and a.send_name like concat(#{searchKeyword},'%') then '1'
+						when a.type = "1" and (select count(*) from i_training_grp where training_code = a.code and gp_send_name like concat(#{searchKeyword},'%'))>0 then '1'
+						else '0'
+					end 
+				)> 0
+				
+			</if>
+			<if test="searchCondition=='group_name'">	
+				and  b.group_name like concat(#{searchKeyword},'%')
+			</if>
+			<if test="searchCondition=='create_id'">	
+				and  a.create_id like concat(#{searchKeyword},'%')
+			</if>
+			
+		</if>
+			 order by  c.maxcode desc, a.code desc  limit #{startRowNum}, ${pageSize}
+		
+ 	</select>
+ 	
+ 	
+ 	<select id="selectExcuteListCnt" parameterType="kr.nshare.training.service.TrainingVO" resultType="java.lang.Integer">
+ 	<![CDATA[
+ 		select  
+			count(*)
+    	from i_training as a, i_group as b
+    	where
+		a.ig_code = b.code
+		]]>
+		<if test="lev!= 'admin'">
+		and 
+			a.institution_code in (
+				select b.code from i_member as a, i_institution as b, i_auth_mapping as c
+				where
+					a.code = c.member_code
+				and
+					b.code = c.institution_code
+				and
+					a.userid = #{userid}
+			)		   
+		</if>
+    	<if test="searchInstitution != ''">
+		and  a.institution_code = #{searchInstitution}
+		</if> 
+    	<if test="searchKeyword!=null and searchKeyword != ''">
+    		    		
+			<if test="searchCondition=='tname'">	
+				and  a.tname like concat(#{searchKeyword},'%')
+			</if>
+			<if test="searchCondition=='send_name'">	
+				and 
+				(
+					case 
+						when a.type = "0" and a.send_name like concat(#{searchKeyword},'%') then '1'
+						when a.type = "1" and (select count(*) from i_training_grp where training_code = a.code and gp_send_name like concat(#{searchKeyword},'%'))>0 then '1'
+						else '0'
+					end 
+				)> 0
+			</if>
+			<if test="searchCondition=='group_name'">	
+				and  b.group_name like concat(#{searchKeyword},'%')
+			</if>
+			<if test="searchCondition=='create_id'">	
+				and  a.create_id like concat(#{searchKeyword},'%')
+			</if>
+			
+		</if>
+		
+ 	</select>
+ 	
+ 	<select id="selectExcuteGroupSummary" parameterType="kr.nshare.training.service.TrainingVO" resultType="kr.nshare.training.service.TrainingVO">
+ 	
+ 	select 
+ 		group_name
+ 		, group_code
+ 		, (count(group_code)*2) as group_cnt
+ 	from (
+ 	<![CDATA[
+ 		select  
+		b.group_name
+		, b.code as group_code
+		, a.* 
+    		from i_training as a, i_group as b, (
+																	select  b.code, MAX(a.code) as maxcode 
+																	from i_training as a, i_group as b 	
+																	where
+																		a.ig_code = b.code  
+																	group by b.code 
+																) as c 
+    	where
+		a.ig_code = b.code
+		and  b.code= c.code
+		]]>
+		<if test="lev!= 'admin'">
+		and 
+			a.institution_code in (
+				select b.code from i_member as a, i_institution as b, i_auth_mapping as c
+				where
+					a.code = c.member_code
+				and
+					b.code = c.institution_code
+				and
+					a.userid = #{userid}
+			)		   
+		</if>
+    	<if test="searchInstitution != ''">
+		and  a.institution_code = #{searchInstitution}
+		</if> 
+    	<if test="searchKeyword!=null and searchKeyword != ''">
+    		<if test="searchCondition=='tname'">	
+				and  a.tname like concat(#{searchKeyword},'%')
+			</if>
+			<if test="searchCondition=='send_name'">	
+				and 
+				(
+					case 
+						when a.type = "0" and a.send_name like concat(#{searchKeyword},'%') then '1'
+						when a.type = "1" and (select count(*) from i_training_grp where training_code = a.code and gp_send_name like concat(#{searchKeyword},'%'))>0 then '1'
+						else '0'
+					end 
+				)> 0
+			</if>
+			<if test="searchCondition=='group_name'">	
+				and  b.group_name like concat(#{searchKeyword},'%')
+			</if>
+			<if test="searchCondition=='create_id'">	
+				and  a.create_id like concat(#{searchKeyword},'%')
+			</if>
+		</if>
+		order by  c.maxcode desc, a.code desc  limit #{startRowNum}, ${pageSize}
+		) as tb group by group_code order by group_code desc 
+		
+ 	</select>
+ 	 	
+ 	
+ 	<!-- 훈련 승인 등록(훈련생성 시) -->
+ 	<insert id="insertTrainingApproval"  parameterType="kr.nshare.training.service.TrainingVO">
+ 		insert into i_training_approval (training_code, sdate ,udate) values
+			(
+				#{training_code} 
+				,now()
+				,now()
+			)		
+ 	</insert>
+ 	
+ 	  <!-- 훈련  삭제시 승인 정보 삭제 -->
+    <delete id="deleteTrainingApproval" parameterType="String">
+    	delete from i_training_approval
+    	where 
+    		training_code = #{code}
+    </delete>
+    
+      <!-- 관리자가 훈련 승인시 업데이트-->
+    <update id="updateTrainingApproval" parameterType="kr.nshare.training.service.TrainingVO">
+     update i_training_approval set 
+			approval_type							=#{approval_type}
+			,approval_id							=#{approval_id}
+			,udate                               		= now() 			     
+	where training_code = #{training_code}
+    </update>
+    
+</mapper>

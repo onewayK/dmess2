@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+     PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+     "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+ 	
+    <mapper namespace="kr.nshare.faq.service.mapper.FaqMapper">
+ 	
+ 	<!-- 
+	 	public void insertFaq(FaqVO vo) throws Exception;
+		public void updateFaq(FaqVO vo) throws Exception;
+		public FaqVO selectFaqByCode(String code) throws Exception;
+		public List<FaqVO> selectFaqList(FaqVO vo) throws Exception;
+		public int selectFaqListCnt(FaqVO vo) throws Exception;
+
+ 	 -->
+ 	<!-- faq 등록 -->
+ 	<insert id="insertFaq" parameterType="kr.nshare.faq.service.FaqVO" useGeneratedKeys="true" keyProperty="code">
+ 		insert into i_faq 
+ 			(
+ 				faq_q
+ 				, faq_a
+ 				, sdate
+ 				, type
+ 				, institution_code
+ 			) values 
+ 			(
+ 				#{faq_q}
+ 				, #{faq_a}
+ 				, now()
+ 				, #{type}
+ 				, #{institution_code}
+ 			)
+ 		
+ 	</insert>
+    
+    <!-- faq 수정 -->
+    <update id="updateFaq" parameterType="kr.nshare.faq.service.FaqVO">
+    	update i_faq set 
+    	faq_q 				= #{faq_q}
+    	, faq_a 				= #{faq_a}
+    	, sdate 				= now()
+    	, type				= #{type}
+    	, institution_code	= #{institution_code}
+    	, useyn 				= #{useyn}
+    	where
+    		code = #{code}
+    </update>
+ 	
+ 	<!-- faq 상세 -->
+ 	<select id="selectFaqByCode" parameterType="String" resultType="kr.nshare.faq.service.FaqVO">
+ 		select * from i_faq where 1=1 
+ 		and code = #{code}
+ 	</select>
+ 	
+ 	<!-- 훈련 사용자 삭제 루틴 -->
+    <delete id="deleteFaqByCode" parameterType="String">
+    	delete from i_faq 	where code = #{code}
+    </delete>
+    
+ 	 <delete id="deleteFaqByInstitutionCode" parameterType="String">
+    	delete from i_faq 	where institution_code = #{code}
+    </delete>
+    
+ 	<!-- faq list -->
+ 	<select id="selectFaqList" parameterType="kr.nshare.faq.service.FaqVO" resultType="kr.nshare.faq.service.FaqVO">
+ 
+	 		select a.*, b.institution_name  from (
+	 			select * from i_faq
+	 			where 1=1
+	 			<if test="lev!= 'admin'">
+	 			and institution_code in (
+					select b.code from i_member as a , i_institution as b , i_auth_mapping as c
+					where
+						a.code = c.member_code
+					and b.code = c.institution_code
+					and a.userid =#{userid}
+				)
+				or type = 'c'
+				</if>
+	 		) as a  left OUTER join i_institution as b 
+			on
+			a.institution_code = b.code
+		where 1=1
+		<if test="useyn != '' ">
+			and a.useyn = #{useyn}	
+ 		</if>
+		<if test="searchCondition=='faq_q'">
+			and a.faq_q like concat('%',#{searchKeyword},'%')
+		</if>
+		<if test="searchCondition=='faq_a'">
+			and a.faq_a like concat('%',#{searchKeyword},'%')
+		</if>
+
+ 	</select>
+ 	
+ 	<!-- faq cnt -->
+ 	<select id="selectFaqListCnt" parameterType="kr.nshare.faq.service.FaqVO" resultType="java.lang.Integer">
+ 		select count(*) from (
+ 			select * from i_faq
+ 			where 1=1
+ 			and institution_code in (
+				select b.code from i_member as a , i_institution as b , i_auth_mapping as c
+				where
+					a.code = c.member_code
+				and b.code = c.institution_code
+				and a.userid = #{userid}
+			)
+			or type = 'c'
+ 		) as a
+ 		where 1=1  		
+ 		 
+ 		<if test="useyn != '' ">
+			and a.useyn = #{useyn}	
+ 		</if>
+		<if test="searchCondition=='faq_q'">
+			and a.faq_q like concat('%',#{searchKeyword},'%')
+		</if>
+		<if test="searchCondition=='faq_a'">
+			and a.faq_a like concat('%',#{searchKeyword},'%')
+		</if>
+ 	</select>
+ 	 	
+</mapper>

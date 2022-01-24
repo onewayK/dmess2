@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+     PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+     "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+ 	
+    <mapper namespace="kr.nshare.common.mapper.CommonMapper">
+ 	
+ 	
+ 	
+ 	<!-- menu list  -->
+ 	<select id="selectMenuByLev" parameterType="String" resultType="kr.nshare.common.MenuVO">
+		
+		SELECT * FROM i_menu as a, i_menu_mapping as b
+			where
+				a.menu_id = b.mi_code
+			and
+				b.level_type = #{lev}
+			order by substr(a.menu_id,1,2) asc, a.sort asc
+ 	</select>
+ 	
+ 	 <!-- Role for menu   -->
+ 	<select id="selectMenuForUrl" parameterType="String" resultType="java.lang.String">
+		
+		SELECT DISTINCT concat('ROLE_',b.level_type) FROM i_menu as a, i_menu_mapping as b
+			where
+				a.menu_id = b.mi_code
+			and
+				a.sub_url  like concat('%',#{url} ,'%')
+		
+ 	</select>
+ 	
+ 	 <select id ="selectCommonList" parameterType="kr.nshare.common.CommonVO" resultType="kr.nshare.common.CommonVO">
+		
+		SELECT 
+			code
+			, l_grp 
+			, m_grp 
+			, s_grp 
+			, name
+			, value 
+			, comment
+			, sdate 
+		FROM i_common where 
+			1=1 
+		
+		
+			<if test="l_grp !='' ">	
+				and  l_grp = #{l_grp}
+			</if>
+			<if test="m_grp !='' ">	
+				and  m_grp = #{m_grp}
+			</if>
+			<if test="s_grp !='' ">	
+				and  s_grp = #{s_grp}
+			</if>
+			<if test="code !='' ">	
+				and  code = #{code}
+			</if>
+			
+		
+		 	 
+ 	 </select>
+	
+	 <insert id="insertImage"
+	 		parameterType="kr.nshare.common.CommonVO" 
+ 			useGeneratedKeys="true" 
+ 			keyProperty="code">
+ 	
+ 		<![CDATA[
+	 		insert into i_file
+	 		(
+	 			ori_name
+	 			, path
+	 			, file_name
+	 			, sdate
+	 			, uc
+	 			,type
+	 		) 
+			values
+			(
+				#{ori_name}
+				, #{path}
+				, #{file_name}
+				, now()
+				, #{uc}
+				, #{type}
+			);
+ 			]]>
+ 	</insert>
+ 	
+ 	<!-- menu list  -->
+ 	<select id="selectImage" parameterType="String" resultType="kr.nshare.common.CommonVO">
+		
+	select 
+		code, ori_name, path, file_name, sdate, uc , type
+	from i_file  
+		where 
+	code = #{code}
+		
+ 	</select>
+ 	  	 	
+</mapper>

@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:mybatis="http://mybatis.org/schema/mybatis-spring" 
+	xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:p="http://www.springframework.org/schema/p" 
+	xmlns:tx="http://www.springframework.org/schema/tx"
+	xmlns:aop="http://www.springframework.org/schema/aop"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans 
+	http://www.springframework.org/schema/beans/spring-beans-3.2.xsd
+	http://www.springframework.org/schema/context 
+	http://www.springframework.org/schema/context/spring-context-3.2.xsd
+	http://www.springframework.org/schema/tx
+	http://www.springframework.org/schema/tx/spring-tx-3.1.xsd
+	http://www.springframework.org/schema/aop
+	http://www.springframework.org/schema/aop/spring-aop-3.2.xsd
+	http://mybatis.org/schema/mybatis-spring http://mybatis.org/schema/mybatis-spring.xsd
+	">
+	
+			<bean id="propertyConfigurer"
+		        class="org.springframework.beans.factory.config.PropertyPlaceholderConfigurer">
+		        <property name="locations">
+		            <list>
+		                <value>classpath:/prop/dbpool.properties</value>
+		            </list>
+		        </property>
+		    </bean>
+			
+		    <!-- dataSource log 출력용 -->
+		    <bean id="dataSourceSpied" class="org.apache.tomcat.jdbc.pool.DataSource" destroy-method="close">
+		    <!-- <bean id="dataSourceSpied" class="org.apache.tomcat.jdbc.pool.DataSource" destroy-method="close"> -->
+		        <property name="driverClassName" value="${dbpool.DriverClassName}"/>
+		        <property name="url" value="${dbpool.Url}" />
+		        <property name="username" value="${dbpool.UserName}"/>
+		        <property name="password" value="${dbpool.Password}"/>
+		        <property name="initialSize" value="${dbpool.min.size}" />
+				<property name="maxActive" value="${dbpool.max.size}" />
+		        <property name="maxIdle" value="5" />
+				<property name="minIdle" value="2" />
+				<property name="testOnBorrow" value="true"/>
+				 <!-- 특정 시간마다 validationQuery를 실행 셋팅 시작 -->
+		        <property name="validationQuery" value="select 1"/>
+		        <property name="testWhileIdle" value="true"/>
+		        <property name="timeBetweenEvictionRunsMillis" value="7200000"/>
+		        <!-- 특정 시간마다 validationQuery를 실행 셋팅 끝 -->
+		    </bean>
+		    
+		    <!-- dataSource -->
+		    <bean id="dataSource" class="net.sf.log4jdbc.Log4jdbcProxyDataSource">
+		    
+		        <constructor-arg ref="dataSourceSpied" />
+		        <property name="logFormatter">
+		            <bean class="net.sf.log4jdbc.tools.Log4JdbcCustomFormatter">
+		                <property name="loggingType" value="MULTI_LINE" />
+		                <property name="sqlPrefix" value="SQL         :  "/>
+		            </bean>
+		        </property>
+		    </bean>
+		    
+		    
+		    
+		    
+			<context:annotation-config/>
+			<tx:annotation-driven transaction-manager="transactionManager" />
+			<bean id="transactionManager"
+				class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+				<property name="dataSource" ref="dataSource"></property>
+			</bean>
+		    
+		    <!-- mybatis sql session template -->
+			<bean id="sqlSessionFactory" class="org.mybatis.spring.SqlSessionFactoryBean">
+				<property name="dataSource" ref="dataSource" />
+				<property name="configLocation" 		value="classpath:/mybatis/config/mybatis-config.xml" />
+				<property name="mapperLocations" 	value="classpath:/mybatis/mapper/**/*_${dbpool.DbType}_SQL.xml" />
+			</bean>
+			
+			
+			<!-- sqlSession -->
+			<bean id="sqlSessionTemplate" class="org.mybatis.spring.SqlSessionTemplate">
+				<constructor-arg ref="sqlSessionFactory" />
+			</bean>
+			
+			<!-- sqlSession -->
+			<bean id="sqlSession" class="org.mybatis.spring.SqlSessionTemplate">
+				<constructor-arg ref="sqlSessionFactory" />
+			</bean>
+			
+			<!-- 인증용 -->
+			<bean id="loginService" class="kr.nshare.common.service.security.LoginService">
+				
+			</bean>
+			
+			
+			<!-- 트렌젝션 처리용 test중 -->
+			<aop:config>
+			    <aop:pointcut id="serviceOperation" expression="execution(* kr.nshare.service..*Service.*(..))"/>
+			    <aop:advisor pointcut-ref="serviceOperation" advice-ref="txAdvice"/>
+			</aop:config>
+			
+			<tx:advice id="txAdvice">
+			    <tx:attributes>
+			      <tx:method name="select*" read-only="true"/>
+			      <tx:method name="*"/>
+			    </tx:attributes>
+			</tx:advice>
+			
+						
+    </beans>
+    

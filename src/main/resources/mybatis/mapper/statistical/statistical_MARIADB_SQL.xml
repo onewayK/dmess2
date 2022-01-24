@@ -1,0 +1,3613 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+     PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+     "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+ 	
+    <mapper namespace="kr.nshare.statistics.service.mapper.StatisticsMapper">
+ 	<select id = "selectTrainingListByInstatutionCode" parameterType="String" resultType="kr.nshare.statistics.service.StatisticsVO">
+ 		select 
+ 			code
+ 			, tname
+ 			, title
+ 		from i_training 
+ 			where
+ 				del_flag ='n' 
+ 			and 
+ 				institution_code = #{institution_code}
+ 	</select>
+ 	
+ 	
+ 	
+ 	<!-- 유저별 -->
+ 	<select id="selectTrainingLogListGrupByUser" parameterType="String" resultType="kr.nshare.statistics.service.StatisticsVO">
+ 	select 
+		b.code
+		,a.send_email
+		, send_name
+		, a.training_type1
+		, a.training_type2
+		, a.training_type3
+		
+		, 	(case 
+				when (b.type1_use='' or b.type1_use IS NULL) then 'X' 
+				ELSE 'O'
+			end) AS type1_use
+		, 	(case 
+				when (b.type2_use='' or b.type2_use IS NULL) then 'X' 
+				ELSE 'O'
+			end) AS type2_use
+		, 	(case 
+				when (b.type3_use='' or b.type3_use IS NULL) then 'X' 
+				ELSE 'O'
+			end) AS type3_use
+		, b.type1_date
+		, b.type2_date
+		, b.type3_date
+		, AES_DECRYPT(UNHEX(c.email), (select secret_key from i_configuration where code=1)) as email
+		, AES_DECRYPT(UNHEX(c.name), (select secret_key from i_configuration where code=1)) as name
+		, c.department_name
+		, c.unikey 
+		, c.code as training_user_code
+		, b.sdate
+		, b.send_date
+		, (select count(*) from i_training_register where training_code = c.training_code and email = c.email and name=c.name) as register_cnt
+	from i_training as a, i_training_log as b, i_training_user as c
+	where
+		a.code = b.training_code 
+	and
+		a.code = #{training_code}
+	and
+		b.training_user_code = c.code
+ 	</select>
+ 	
+ 	
+ 	<!-- 피싱진행 상세 내용 -->
+ 	<select id="selectPhishingList" parameterType="kr.nshare.statistics.service.StatisticsVO" resultType="kr.nshare.statistics.service.StatisticsVO">
+ 		select 
+		code
+		, t_userId
+		, t_passwd 
+	    from i_training_log_phishing 
+ 			where 
+ 				training_code = #{training_code}
+ 			and
+ 				training_user_code = #{training_user_code}
+ 			order by code desc 	
+ 	
+ 	</select>
+ 	
+ 	<!-- 유저별 -->
+ 	<select id="selectTrainingLogListGrupByUser2" parameterType="java.util.List" resultType="kr.nshare.statistics.service.StatisticsVO">
+ 	<![CDATA[
+ 	select *
+		 , (case
+	    		when register_type = 'n'  || register_time_type = 'N'  || type1_date is null || type1_date =''|| register_sdate is null || register_sdate ='' then
+	    				''
+				when DATE_FORMAT(register_sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT((type1_date+INTERVAL register_time MINUTE),'%Y%m%d%H%i%s') then
+				      ''
+				when TIME_FORMAT(TIMEDIFF(register_sdate,(type1_date+INTERVAL register_time MINUTE)),'%H%i') ='0000' then
+					TIME_FORMAT(TIMEDIFF(register_sdate,(type1_date+INTERVAL register_time MINUTE)),'%s초')
+				when TIME_FORMAT(TIMEDIFF(register_sdate,(type1_date+INTERVAL register_time MINUTE)),'%H') ='00' then
+					TIME_FORMAT(TIMEDIFF(register_sdate,(type1_date+INTERVAL register_time MINUTE)),'%i분%s초')
+				else
+					TIME_FORMAT(TIMEDIFF(register_sdate,(type1_date+INTERVAL register_time MINUTE)),'%H시%i분%s초')
+				end) as register_excess_time  
+		 , (case
+	    		when register_time_type ='N' || type1_date is null || type1_date =''|| register_sdate is null || register_sdate ='' then
+	    				'-'
+				when DATE_FORMAT(register_sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT((type1_date+INTERVAL register_time MINUTE),'%Y%m%d%H%i%s') then
+						'O'
+					else
+						'X'
+				end) as registertime_use
+from (
+	 	select 
+			b.code 
+			, a.code as training_code
+			, a.ig_code
+			, a.send_email
+			, a.register_type
+			, a.register_time_type
+			, a.register_time 
+			, send_name
+			, (
+				case 
+					when a.type = '0' and a.training_type1='Y' then 'Y'
+					when a.type = '1' AND  (select COUNT(*) from i_training_grp where training_code = a.code and training_type1 = 'Y' and code = c.tg_code )>0 THEN 'Y'
+					else '' 
+				END
+			) as training_type1
+			,(
+				case 
+					when a.type = '0' AND a.training_type2 ='Y' THEN 'Y'
+					when a.type = '1' AND  (select COUNT(*) from i_training_grp where training_code = a.code and training_type2 = 'Y' and code = c.tg_code )>0 THEN 'Y'
+					else ''
+				END
+			) as training_type2
+			,(
+				case 
+					when a.type = '0' AND a.training_type3 ='Y' THEN 'Y'
+					when a.type = '1' AND  (select COUNT(*) from i_training_grp where training_code = a.code and training_type3 = 'Y' and code = c.tg_code )>0 THEN 'Y'
+					else ''
+				END
+			) as training_type3
+			,
+			(
+				case 
+					when a.type = '0' AND (instr(a.training_type2_content,'#s_custom_form#')>0 and instr(a.training_type2_content,'#s_custom_form#')>0 and instr(a.training_type2_content,'#action_button_script#')>0) then 'Y'
+					when a.type = '1' AND (SELECT  sum(if((instr(aa.training_type2_content,'#s_custom_form#')>0 and instr(aa.training_type2_content,'#s_custom_form#')>0 and instr(aa.training_type2_content,'#action_button_script#')>0),'1','0')) AS PH FROM i_training_grp as aa where aa.training_code = b.training_code and aa.code = c.tg_code )>0 then 'Y'
+					ELSE 'N'
+				END
+			) AS phishing_use
+			, 	(case 
+					when (b.type1_use='' or b.type1_use IS NULL) then 'X' 
+					when DATE_FORMAT(b.type1_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then 'X'
+					ELSE 'O'
+				end) AS type1_use
+			, 	(case 
+					when (b.type2_use='' or b.type2_use IS NULL) then 'X' 
+					when DATE_FORMAT(b.type2_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then 'X'
+					ELSE 'O'
+				end) AS type2_use
+			, 	(case 
+					when (b.type3_use='' or b.type3_use IS NULL) then 'X' 
+					when DATE_FORMAT(b.type3_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then 'X'
+					ELSE 'O'
+				end) AS type3_use
+			, b.type1_date
+			, b.type2_date
+			, b.type3_date
+			, AES_DECRYPT(UNHEX(c.email), (select secret_key from i_configuration where code=1)) as email
+			, AES_DECRYPT(UNHEX(c.name), (select secret_key from i_configuration where code=1)) as name
+			, c.department_name
+			, c.unikey 
+			, c.code as training_user_code
+			, b.sdate
+			 , b.send_date
+			, (select count(*) 
+				from i_training_log_phishing
+				 where training_code = c.training_code and training_user_code = c.code
+				 and DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+				 ) as phishing_cnt
+			, (case 
+					when ((select count(DISTINCT email,name) 
+								from i_training_register 
+								where training_code = c.training_code and email = c.email and name=c.name 
+								and DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+							) > 0) then 'O' 
+					ELSE 'X'
+				end)  as register_use
+			, (
+					select min(sdate) 
+					from i_training_register 
+					where training_code = c.training_code and email = c.email and name=c.name 
+					and DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+					GROUP BY email,name
+				) as register_sdate
+			, (
+					select t_userId 	
+					from i_training_log_phishing 
+					where training_code = c.training_code and training_user_code = c.code 
+					and DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+					order by code desc limit 1
+				) as t_userId
+			, (
+					select t_passwd  	
+					from i_training_log_phishing 
+					where training_code = c.training_code and training_user_code = c.code 
+					and DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+					order by code desc limit 1
+				) as t_passwd
+		from i_training as a, i_training_log as b, i_training_user as c
+		where
+			a.code = b.training_code 
+		and
+			b.training_user_code = c.code
+		and 
+			b.status='end'
+		and
+		]]>
+			a.code in (
+	 			   <foreach collection="list" item="element" separator=" , ">#{element.code}</foreach>
+	    )
+	) as tb 
+ 	</select>
+ 	
+ 	<select id="selectTrainingGroupList" parameterType="java.util.List" resultType="kr.nshare.statistics.service.StatisticsVO">
+ 		select
+ 			a.code
+ 			, a.tname
+ 		from i_training as a 
+ 		where 1=1
+ 		and
+			a.code in (
+    		<foreach collection="list" item="element" separator=" , ">#{element.code}</foreach>
+    	)
+    	order by code asc 
+ 	</select>
+ 	
+ 	<select id="selectTrainingLogListGrupByUserSum" parameterType="String" resultType="kr.nshare.statistics.service.StatisticsVO">
+ 	<![CDATA[
+ 	select 
+		sum(total) as total
+		, sum(type1_use) as type1_use_sum
+		, sum(type2_use) as type2_use_sum
+		, sum(type3_use) as type3_use_sum
+		, sum(register_cnt) as register_cnt
+	 from (
+		select 
+			b.code
+			, '1' as total
+			,(case 
+					when (b.type1_use='' or b.type1_use IS NULL) then '0' 
+					when DATE_FORMAT(b.type1_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0' 
+					ELSE '1'
+				end) AS type1_use
+			, 	(case 
+					when (b.type2_use='' or b.type2_use IS NULL) then '0' 
+					when DATE_FORMAT(b.type2_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0' 
+					ELSE '1'
+				end) AS type2_use
+			, 	(case 
+					when (b.type3_use='' or b.type3_use IS NULL) then '0' 
+					when DATE_FORMAT(b.type3_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0' 
+					ELSE '1'
+				end) AS type3_use
+			, (
+				select count(*) from i_training_register 
+				where training_code = c.training_code and email = c.email and name=c.name
+				and DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+			) as register_cnt 
+			]]>			
+		from i_training as a, i_training_log as b, i_training_user as c
+		where
+			a.code = b.training_code 
+		and
+			a.code = #{training_code}
+		and
+			b.training_user_code = c.code
+	) as tb
+ 	</select>
+ 	
+ 	<!-- 유저별 -->
+ 	<select id="selectTrainingLogListGrupByUserExcel" parameterType="String" resultType="HashMap">
+ 	<![CDATA[
+ 		select 
+ 		 CAST((@ROWNUM := @ROWNUM + 1) as CHAR(50)) as code
+ 		, CAST(AES_DECRYPT(UNHEX(email), (select secret_key from i_configuration where code=1)) as CHAR(100)) as email
+ 		, CAST(AES_DECRYPT(UNHEX(name), (select secret_key from i_configuration where code=1)) as CHAR(100)) as name 
+ 		, department_name
+ 		, unikey 	
+ 		, training_type1
+ 		, training_type2
+ 		, training_type3
+ 		, if(training_type1='Y',type1_use,'__gray__') as type1_use
+		, if(training_type2='Y',type2_use,'__gray__') as type2_use
+		, if(training_type3='Y',type3_use,'__gray__') as type3_use
+		, if(phishing_use='Y',if(phishing_cnt>0,'O','X'),'__gray__') as phishing_use
+		, if(training_type1='Y',type1_date,'__gray__') as type1_date
+		, if(training_type2='Y',type2_date,'__gray__') as type2_date
+		, if(training_type3='Y',type3_date,'__gray__') as type3_date
+ 		, sdate
+ 		, send_date
+ 		, if(register_type='y',register_use,'__gray__') as register_use
+ 		, if(register_sdate is not null,register_sdate,'') as register_sdate
+ 		, (case
+ 				when register_type = 'n'  || register_time_type = 'N'  then
+	    				'__gray__'
+	    		when type1_date is null || type1_date =''|| register_sdate is null || register_sdate ='' then
+	    				''
+				when DATE_FORMAT(register_sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT((type1_date+INTERVAL register_time MINUTE),'%Y%m%d%H%i%s') then
+				      ''
+				when TIME_FORMAT(TIMEDIFF(register_sdate,(type1_date+INTERVAL register_time MINUTE)),'%H%i') ='0000' then
+					TIME_FORMAT(TIMEDIFF(register_sdate,(type1_date+INTERVAL register_time MINUTE)),'%s초')
+				when TIME_FORMAT(TIMEDIFF(register_sdate,(type1_date+INTERVAL register_time MINUTE)),'%H') ='00' then
+					TIME_FORMAT(TIMEDIFF(register_sdate,(type1_date+INTERVAL register_time MINUTE)),'%i분%s초')
+				else
+					TIME_FORMAT(TIMEDIFF(register_sdate,(type1_date+INTERVAL register_time MINUTE)),'%H시%i분%s초')
+			end) as register_excess_time  
+		 , (case
+				 when register_type = 'n'  || register_time_type = 'N'  then
+	    				''
+	    		when register_type = 'n'  || register_time_type ='N' || type1_date is null || type1_date =''|| register_sdate is null || register_sdate ='' then
+	    				''
+				when DATE_FORMAT(register_sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT((type1_date+INTERVAL register_time MINUTE),'%Y%m%d%H%i%s') then
+						'O'
+					else
+						'X'
+			end) as registertime_use
+ 	from (
+	 	select 
+			b.code 
+			, a.code as training_code
+			, a.ig_code
+			, a.send_email
+			, a.register_type
+			, a.register_time_type
+			, a.register_time 
+			, send_name
+			, (
+				case 
+					when a.type = '0' and a.training_type1='Y' then 'Y'
+					when a.type = '1' AND  (select COUNT(*) from i_training_grp where training_code = a.code and training_type1 = 'Y' and code = c.tg_code )>0 THEN 'Y'
+					else '' 
+				END
+			) as training_type1
+			,(
+				case 
+					when a.type = '0' AND a.training_type2 ='Y' THEN 'Y'
+					when a.type = '1' AND  (select COUNT(*) from i_training_grp where training_code = a.code and training_type2 = 'Y' and code = c.tg_code )>0 THEN 'Y'
+					else ''
+				END
+			) as training_type2
+			,(
+				case 
+					when a.type = '0' AND a.training_type3 ='Y' THEN 'Y'
+					when a.type = '1' AND  (select COUNT(*) from i_training_grp where training_code = a.code and training_type3 = 'Y' and code = c.tg_code )>0 THEN 'Y'
+					else ''
+				END
+			) as training_type3
+			,
+			(
+				case 
+					when a.type = '0' AND (instr(a.training_type2_content,'#s_custom_form#')>0 and instr(a.training_type2_content,'#s_custom_form#')>0 and instr(a.training_type2_content,'#action_button_script#')>0) then 'Y'
+					when a.type = '1' AND (SELECT  sum(if((instr(aa.training_type2_content,'#s_custom_form#')>0 and instr(aa.training_type2_content,'#s_custom_form#')>0 and instr(aa.training_type2_content,'#action_button_script#')>0),'1','0')) AS PH FROM i_training_grp as aa where aa.training_code = b.training_code and aa.code = c.tg_code )>0 then 'Y'
+					ELSE 'N'
+				END
+			) AS phishing_use
+			, 	(case 
+					when (b.type1_use='' or b.type1_use IS NULL) then 'X' 
+					when DATE_FORMAT(b.type1_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then 'X'
+					ELSE 'O'
+				end) AS type1_use
+			, 	(case 
+					when (b.type2_use='' or b.type2_use IS NULL) then 'X' 
+					when DATE_FORMAT(b.type2_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then 'X'
+					ELSE 'O'
+				end) AS type2_use
+			, 	(case 
+					when (b.type3_use='' or b.type3_use IS NULL) then 'X' 
+					when DATE_FORMAT(b.type3_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then 'X'
+					ELSE 'O'
+				end) AS type3_use
+			, b.type1_date
+			, b.type2_date
+			, b.type3_date
+			, email
+			, name
+			, c.department_name
+			, c.unikey 
+			, c.code as training_user_code
+			, b.sdate
+			 , b.send_date
+			, (select count(*) 
+				from i_training_log_phishing
+				 where training_code = c.training_code and training_user_code = c.code
+				 and DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+				 ) as phishing_cnt
+			, (case 
+					when ((select count(DISTINCT email,name) 
+								from i_training_register 
+								where training_code = c.training_code and email = c.email and name=c.name 
+								and DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+							) > 0) then 'O' 
+					ELSE 'X'
+				end)  as register_use
+			, (
+					select min(sdate) 
+					from i_training_register 
+					where training_code = c.training_code and email = c.email and name=c.name 
+					and DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+					GROUP BY email,name
+				) as register_sdate
+			, (
+					select t_userId 	
+					from i_training_log_phishing 
+					where training_code = c.training_code and training_user_code = c.code 
+					and DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+					order by code desc limit 1
+				) as t_userId
+			, (
+					select t_passwd  	
+					from i_training_log_phishing 
+					where training_code = c.training_code and training_user_code = c.code 
+					and DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+					order by code desc limit 1
+				) as t_passwd
+		from i_training as a, i_training_log as b, i_training_user as c 	
+		where
+			a.code = b.training_code 
+		and
+			b.training_user_code = c.code
+		and 
+			b.status='end'
+		and
+		]]>
+		 a.code = #{training_code}
+		 <![CDATA[
+	) as tb ,(SELECT @ROWNUM := 0) R 
+	]]>
+ 	</select>
+ 	
+ 	
+ 	<select id="selectTrainingLogListGrupByDepartment" parameterType="String" resultType="kr.nshare.statistics.service.StatisticsVO">
+ 	select 
+	tb.department_name 
+	, count(tb.department_name) as total 
+	, cast(sum(type1_use) as INT) as type1_use
+	, cast(sum(type2_use) as INT) as type2_use
+	, cast(sum(type3_use) as INT) as type3_use
+	, cast(sum(register_cnt) as INT) as register_cnt
+	, training_type1
+	, training_type2
+	, training_type3
+	from(	
+		select 
+			b.code
+			,a.send_email
+			, send_name
+			, a.training_type1
+			, a.training_type2
+			, a.training_type3
+			
+			, 	(case 
+					when (b.type1_use='' or b.type1_use IS NULL) then '0' 
+					ELSE '1'
+				end) AS type1_use
+			, 	(case 
+					when (b.type2_use='' or b.type2_use IS NULL) then '0' 
+					ELSE '1'
+				end) AS type2_use
+			, 	(case 
+					when (b.type3_use='' or b.type3_use IS NULL) then '0' 
+					ELSE '1'
+				end) AS type3_use
+			
+			, CAST(AES_DECRYPT(UNHEX(c.email), (select secret_key from i_configuration where code=1)) as CHAR(100)) as email
+ 			, CAST(AES_DECRYPT(UNHEX(c.name), (select secret_key from i_configuration where code=1)) as CHAR(100)) as name 
+ 			, c.department_name
+			, c.unikey 
+			, b.sdate
+			, b.send_date
+			, (select count(*) from i_training_register where training_code = c.training_code and email = c.email and name=c.name) as register_cnt
+		from i_training as a, i_training_log as b, i_training_user as c
+		where
+			a.code = b.training_code 
+		and
+			a.code =#{training_code}
+		and
+			b.training_user_code = c.code
+		and 
+			 	b.status = 'end'
+	) as tb 
+	where 1=1
+	group by department_name 
+ 	</select>
+ 	
+ 	<!-- 그룹별 리포트 -->
+ 	<select id="selectTrainingLogListGrupByDepartment2"  parameterType="java.util.List" resultType="kr.nshare.statistics.service.StatisticsVO">
+ 	<![CDATA[
+ 	select 
+		tb.department_name 
+		, count(tb.department_name) as total 
+		, cast(sum(type1_use) as INT) as type1_use
+		, cast(sum(type2_use) as INT) as type2_use
+		, cast(sum(type3_use) as INT) as type3_use
+		, cast(sum(register_cnt) as INT) as register_cnt
+		, cast(sum(type1_register_cnt) as INT) as type1_register_cnt
+		,(case when sum(training_type1)>0 then 'Y' ELSE 'N' end ) as training_type1
+		,(case when sum(training_type2)>0 then 'Y' ELSE 'N' end ) as training_type2
+		,(case when sum(training_type3)>0 then 'Y' ELSE 'N' end ) as training_type3
+		, sum(training_type1) as training_type1_cnt
+		, sum(training_type2) as training_type2_cnt
+		, sum(training_type3) as training_type3_cnt
+		, round(ifnull(((cast(sum(type1_use) as INT)*100)/sum(training_type1)),0),2) as training_type1_percent
+		, round(ifnull(((cast(sum(type2_use) as INT)*100)/sum(training_type2)),0),2) as training_type2_percent
+		, round(ifnull(((cast(sum(type3_use) as INT)*100)/sum(training_type3)),0),2) as training_type3_percent
+		, training_code
+	from(	
+		select 
+			b.code
+			,a.send_email
+			, send_name
+			, (case 
+				when a.type = '0' and a.training_type1='Y' then '1'
+				when a.type = '1' and (select count(*) from i_training_grp where training_code = a.code and code = c.tg_code and training_type1='Y')>0 then '1'
+				else '0'
+			  end) as training_type1
+			, (case 
+				when a.type = '0' and a.training_type2='Y' then '1'
+				when a.type = '1' and (select count(*) from i_training_grp where training_code = a.code and code = c.tg_code and training_type2='Y')>0 then '1'
+				else '0'
+			  end) as training_type2
+			, (case 
+				when a.type = '0' and a.training_type3='Y' then '1'
+				when a.type = '1' and (select count(*) from i_training_grp where training_code = a.code and code = c.tg_code and training_type3='Y')>0 then '1'
+				else '0'
+			  end) as training_type3
+
+			, a.code as training_code 
+			,(case 
+	        		when b.type1_use='' or b.type1_use IS NULL then '0' 
+			  		when DATE_FORMAT(b.type1_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0' 
+					ELSE '1'
+				 end) AS type1_use
+         ,(case 
+			  		when b.type2_use='' or b.type2_use IS NULL then '0' 
+					when DATE_FORMAT(b.type2_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0' 
+					ELSE '1' 
+		 		end) AS type2_use
+         ,(case 
+	        		when b.type3_use='' or b.type3_use IS NULL then '0' 
+			  		when DATE_FORMAT(b.type3_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0' 
+					ELSE '1' 
+				end) AS type3_use
+		, AES_DECRYPT(UNHEX(c.email), (select secret_key from i_configuration where code=1)) as email 
+		, AES_DECRYPT(UNHEX(c.name), (select secret_key from i_configuration where code=1)) as name  
+		, c.department_name
+		, c.unikey 
+		, b.sdate
+		, b.send_date
+		, (
+				select count(DISTINCT email) 
+				from i_training_register 
+				where training_code = c.training_code and email = c.email and name=c.name
+				and DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+			) as register_cnt
+		, (
+				select count(DISTINCT email) 
+				from i_training_register 
+				where training_code = c.training_code and email = c.email and name=c.name 
+				and b.type1_use != ''
+				and DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+			) as type1_register_cnt
+		from i_training as a, i_training_log as b, i_training_user as c
+		where
+			a.code = b.training_code 
+		and
+		]]>
+			a.code in (
+    			<foreach collection="list" item="element" separator=" , ">#{element.code}</foreach>
+    	)
+		and
+			b.training_user_code = c.code
+		and 
+			 b.status = 'end'
+	) as tb 
+	where 1=1
+	group by training_code, department_name     
+ 	</select>
+ 	
+ 	<select id="selectTrainingLogListGrupByDepartmentExcel" parameterType="String" resultType="HashMap">
+ 	<![CDATA[
+ 	select 
+		tb.department_name 
+		, count(tb.department_name) as total 
+		, 
+		cast( (case 
+			when sum(training_type1)>0 then 
+				concat(sum(training_type1),'/',cast(sum(type1_use) as INT),'(',round(ifnull(((cast(sum(type1_use) as INT)*100)/sum(training_type1)),0),2),'%)')
+			else
+			     '__gray__'
+		  end) AS  CHAR)  as type1_use
+	
+		,cast((case 
+			when sum(training_type2)>0 then 
+				concat(sum(training_type2),'/',cast(sum(type2_use) as INT),'(',round(ifnull(((cast(sum(type2_use) as INT)*100)/sum(training_type2)),0),2),'%)')
+			else
+			     '__gray__'
+		  end) as CHAR) as type2_use
+		,cast((case 
+			when sum(training_type3)>0 then 
+				concat(sum(training_type3),'/',cast(sum(type3_use) as INT),'(',round(ifnull(((cast(sum(type3_use) as INT)*100)/sum(training_type3)),0),2),'%)')
+			else
+			     '__gray__'
+		  end)  as CHAR) as type3_use
+		, cast(sum(register_cnt) as INT) as register_cnt
+		, cast(sum(type1_register_cnt) as INT) as type1_register_cnt
+		,(case when sum(training_type1)>0 then 'Y' ELSE 'N' end ) as training_type1
+		,(case when sum(training_type2)>0 then 'Y' ELSE 'N' end ) as training_type2
+		,(case when sum(training_type3)>0 then 'Y' ELSE 'N' end ) as training_type3
+		, sum(training_type1) as training_type1_cnt
+		, sum(training_type2) as training_type2_cnt
+		, sum(training_type3) as training_type3_cnt
+		, ifnull(((cast(sum(type1_use) as INT)*100)/sum(training_type1)),0) as training_type1_percent
+		, ifnull(((cast(sum(type2_use) as INT)*100)/sum(training_type2)),0) as training_type2_percent
+		, ifnull(((cast(sum(type3_use) as INT)*100)/sum(training_type3)),0) as training_type3_percent
+		, training_code
+	from(	
+		select 
+			b.code
+			,a.send_email
+			, send_name
+			, (case 
+				when a.type = '0' and a.training_type1='Y' then '1'
+				when a.type = '1' and (select count(*) from i_training_grp where training_code = a.code and code = c.tg_code and training_type1='Y')>0 then '1'
+				else '0'
+			  end) as training_type1
+			, (case 
+				when a.type = '0' and a.training_type2='Y' then '1'
+				when a.type = '1' and (select count(*) from i_training_grp where training_code = a.code and code = c.tg_code and training_type2='Y')>0 then '1'
+				else '0'
+			  end) as training_type2
+			, (case 
+				when a.type = '0' and a.training_type3='Y' then '1'
+				when a.type = '1' and (select count(*) from i_training_grp where training_code = a.code and code = c.tg_code and training_type3='Y')>0 then '1'
+				else '0'
+			  end) as training_type3
+
+			, a.code as training_code 
+			,(case 
+	        		when b.type1_use='' or b.type1_use IS NULL then '0' 
+			  		when DATE_FORMAT(b.type1_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0' 
+					ELSE '1'
+				 end) AS type1_use
+         ,(case 
+			  		when b.type2_use='' or b.type2_use IS NULL then '0' 
+					when DATE_FORMAT(b.type2_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0' 
+					ELSE '1' 
+		 		end) AS type2_use
+         ,(case 
+	        		when b.type3_use='' or b.type3_use IS NULL then '0' 
+			  		when DATE_FORMAT(b.type3_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0' 
+					ELSE '1' 
+				end) AS type3_use
+			, CAST(AES_DECRYPT(UNHEX(c.email), (select secret_key from i_configuration where code=1)) as CHAR(100)) as email 
+			, CAST(AES_DECRYPT(UNHEX(c.name), (select secret_key from i_configuration where code=1)) as CHAR(100)) as name  
+			, c.department_name
+			, c.unikey 
+			, b.sdate
+			, b.send_date
+			, (
+					select count(DISTINCT email) 
+					from i_training_register 
+					where training_code = c.training_code and email = c.email and name=c.name
+					and DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+				) as register_cnt
+			, (
+					select count(DISTINCT email) 
+					from i_training_register 
+					where training_code = c.training_code and email = c.email and name=c.name 
+					and b.type1_use != ''
+					and DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+				) as type1_register_cnt
+		from i_training as a, i_training_log as b, i_training_user as c
+		where
+			a.code = b.training_code 
+		and
+			a.code = #{training_code}
+		and
+			b.training_user_code = c.code
+		and 
+			 	b.status = 'end'
+	) as tb 
+	where 1=1
+	group by department_name
+	]]> 	
+ 	</select>
+ 	
+ 	
+ 	
+ 	
+ 	
+ 	<!-- 트레이닝차트 -->
+ 	<select id="selectTrainingLogChart" parameterType="java.util.List" resultType="kr.nshare.statistics.service.StatisticsVO">
+ 	<![CDATA[
+ 	select
+		    training_code
+		  , start_date
+		  ,register_type
+		  , end_date
+		  , tname
+		  , (case when sum(training_type1)>0 then 'Y' else 'N' end) as training_type1
+		  , (case when sum(training_type2)>0 then 'Y' else 'N' end) as training_type2
+		  , (case when sum(training_type3)>0 then 'Y' else 'N' end) as training_type3
+		  , sum(training_type1) AS training_type1_cal 
+		  , sum(training_type2) AS training_type2_cal 
+		  , sum(training_type3) AS training_type3_cal 	  
+		  , (case when sum(training_type1_2)>0 then 'Y' else 'N' end) as training_type1_2
+		  , (case when sum(training_type1_3)>0 then 'Y' else 'N' end) as training_type1_3
+		  , (case when sum(training_type2_3)>0 then 'Y' else 'N' end) as training_type2_3
+		  , (case when sum(training_type1_2_3)>0 then 'Y' else 'N' end) as training_type1_2_3
+		  , sum(training_type1_2) AS training_type1_2_cal 
+		  , sum(training_type1_3) AS training_type1_3_cal 
+		  , sum(training_type2_3) AS training_type2_3_cal 
+		  , sum(training_type1_2_3) AS training_type1_2_3_cal   	   
+		  , sum(type1_2_use) as type1_2_use
+		  , Round(sum(type1_2_use) * 100 / sum(training_type1_2),2) as type1_2_use_percent  
+		  , sum(type1_3_use) as type1_3_use
+		  , Round(sum(type1_3_use) * 100 / sum(training_type1_3),2) as type1_3_use_percent  
+		  , sum(type2_3_use) as type2_3_use
+		  , Round(sum(type2_3_use) * 100 / sum(training_type2_3),2) as type2_3_use_percent  
+		  , sum(type1_2_3_use) as type1_2_3_use
+		  , Round(sum(type1_2_3_use) * 100 / sum(training_type1_2_3),2) as type1_2_3_use_percent
+		  , count(training_code) as total
+		  , sum(type1_use) as type1_use
+		  , Round(sum(type1_use) * 100 / sum(training_type1),2) as type1_use_percent
+		  , sum(type2_use) as type2_use
+		  , Round(sum(type2_use) * 100 / sum(training_type2),2) as type2_use_percent
+		  , sum(type3_use) as type3_use
+		  , Round(sum(type3_use) * 100 / sum(training_type3),2) as type3_use_percent
+		  , sum(register_cnt) as register_cnt
+		  , if( Round(sum(register_cnt) * 100 / count(training_code),2) > 100 , '100.00', Round(sum(register_cnt) * 100 / count(training_code),2)) as register_cnt_percent
+		  , sum(type1_register_cnt) as type1_register_cnt
+		  , if( Round(sum(type1_register_cnt) * 100 / sum(type1_use),2) > 100 , '100.00', Round(sum(type1_register_cnt) * 100 / sum(type1_use),2)) as type1_register_cnt_percent
+	from (select
+					b.code,
+			        a.code as training_code,
+			        a.send_email,
+			        a.register_type,
+			        a.send_name,
+			        (
+						case 
+							when a.type = '0' and a.training_type1='Y' then '1'
+							when a.type = '1' AND  (select COUNT(*) from i_training_grp where training_code = a.code and training_type1 = 'Y' and code = c.tg_code )>0 THEN '1'
+							else '0' 
+						END
+					) as training_type1,
+			        (
+						case 
+							when a.type = '0' AND a.training_type2 ='Y' THEN '1'
+							when a.type = '1' AND  (select COUNT(*) from i_training_grp where training_code = a.code and training_type2 = 'Y' and code = c.tg_code )>0 THEN '1'
+							else '0'
+						END
+					) as training_type2,
+			
+			        (
+						case 
+							when a.type = '0' AND a.training_type3 ='Y' THEN '1'
+							when a.type = '1' AND  (select COUNT(*) from i_training_grp where training_code = a.code and training_type3 = 'Y' and code = c.tg_code )>0 THEN '1'
+							else '0'
+						END
+					) as training_type3,
+					(
+						case 
+							when a.type = '0' and a.training_type1='Y' and a.training_type2='Y' then '1'
+							when a.type = '1' AND  (select COUNT(*) from i_training_grp where training_code = a.code and training_type1 = 'Y' and training_type2='Y' and code = c.tg_code )>0 THEN '1'
+							else '0' 
+						END
+					) as training_type1_2,
+				 	(
+						case 
+							when a.type = '0' and a.training_type1='Y' and a.training_type3='Y' then '1'
+							when a.type = '1' AND  (select COUNT(*) from i_training_grp where training_code = a.code and training_type1 = 'Y' and training_type3='Y' and code = c.tg_code )>0 THEN '1'
+							else '0' 
+						END
+					) as training_type1_3,
+					(
+						case 
+							when a.type = '0' and a.training_type2='Y' and a.training_type3='Y' then '1'
+							when a.type = '1' AND  (select COUNT(*) from i_training_grp where training_code = a.code and training_type2 = 'Y' and training_type3='Y' and code = c.tg_code )>0 THEN '1'
+							else '0' 
+						END
+					) as training_type2_3,
+					(
+						case 
+							when a.type = '0' and a.training_type1='Y' and a.training_type2='Y' and a.training_type3='Y' then '1'
+							when a.type = '1' AND  (select COUNT(*) from i_training_grp where training_code = a.code and training_type1 = 'Y' and training_type2='Y' and training_type3='Y' and code = c.tg_code )>0 THEN '1'
+							else '0' 
+						END
+					) as training_type1_2_3,
+			        if( a.training_type1='Y', '1', '0') AS training_type1_cal,
+			        if( a.training_type2='Y', '1', '0') AS training_type2_cal,
+			        if( a.training_type3='Y', '1', '0') AS training_type3_cal,
+			        a.start_date,
+			        a.end_date,
+			        a.tname,
+			        (case 
+			        		when b.type1_use='' or b.type1_use IS NULL then '0' 
+					  		when DATE_FORMAT(b.type1_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0' 
+							ELSE '1'
+						 end) AS type1_use,
+			        (case 
+					  		when b.type2_use='' or b.type2_use IS NULL then '0' 
+							when DATE_FORMAT(b.type2_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0' 
+							ELSE '1' 
+						end) AS type2_use,
+			        (case 
+			        		when b.type3_use='' or b.type3_use IS NULL then '0' 
+					  		when DATE_FORMAT(b.type3_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0' 
+							ELSE '1' 
+						end) AS type3_use,
+			        (case 
+			        		when b.type1_use='' or b.type1_use IS NULL then '0'
+							when b.type2_use='' or b.type2_use IS NULL  then '0'   
+					  		when DATE_FORMAT(b.type1_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0'  
+							when DATE_FORMAT(b.type2_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0'  
+							ELSE '1' 
+						end) AS type1_2_use,
+				  	  (case 
+					  	  	when b.type1_use='' or b.type1_use IS NULL then '0' 
+							when b.type3_use='' or b.type3_use IS NULL then '0'
+							when DATE_FORMAT(b.type1_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0' 
+							when DATE_FORMAT(b.type3_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0' 
+							ELSE '1' 
+						end) AS type1_3_use,
+					  (case 
+					  		when b.type2_use='' or b.type2_use IS NULL then '0'
+					  		when b.type3_use='' or b.type3_use IS NULL then '0'
+							when DATE_FORMAT(b.type2_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0'
+							when DATE_FORMAT(b.type3_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0'
+							ELSE '1' 
+						end) AS type2_3_use,
+					  (case 
+					  		when b.type1_use='' or b.type1_use IS NULL then '0'
+					  		when b.type2_use='' or b.type2_use IS NULL then '0'
+					  		when b.type3_use='' or b.type3_use IS NULL then '0' 
+					  		when DATE_FORMAT(b.type1_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0' 
+							when DATE_FORMAT(b.type2_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0'
+							when DATE_FORMAT(b.type3_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0'
+							ELSE '1' 
+						end) AS type1_2_3_use,
+					  AES_DECRYPT(UNHEX(c.email), (select secret_key from i_configuration where code=1)) as email ,
+					  AES_DECRYPT(UNHEX(c.name), (select secret_key from i_configuration where code=1)) as name  ,
+			        c.department_name,
+			        c.unikey,
+			        b.sdate,
+			        b.send_date,
+			       	if( 
+							(	
+								select count(*) 	
+								from i_training_register 
+								where training_code = c.training_code and email = c.email and name=c.name								
+								and DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+							) > 0, 1, 0) as register_cnt
+						,
+			       	if( 
+							(	
+								select count(*) 	
+								from i_training_register 
+								where
+								 b.type1_use!='' 
+								 and b.type1_use IS not NULL 								 
+								 and DATE_FORMAT(b.type1_date ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+								 and training_code = c.training_code and email = c.email and name=c.name 								 
+							 	 and DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+							) > 0, 1, 0) as type1_register_cnt
+		]]> 	
+	      from i_training as a,
+		       	i_training_log as b,
+		        i_training_user as c
+	      where a.code = b.training_code
+	         and 
+		       a.code in (<foreach collection="list" item="element" separator=" , ">#{element.code}</foreach>)
+			 and
+				b.training_user_code = c.code
+			and 
+			 	b.status = 'end'
+			) as tb					
+ 	</select>
+ 	
+ 	<!-- 트레이닝차트 -->
+ 	<select id="selectTrainingLogChart2" parameterType="String" resultType="kr.nshare.statistics.service.StatisticsVO">
+ 	select 
+ 	<![CDATA[
+	training_code
+	, start_date
+	, end_date
+	, tname
+	, training_type1
+	, training_type2
+	, training_type3
+	, count(training_code) as total 
+	, sum(type1_use) as type1_use
+	, Round(sum(type1_use) * 100 / count(training_code),2) as type1_use_percent
+	
+	, sum(type2_use) as type2_use
+	, Round(sum(type2_use) * 100 / count(training_code),2) as type2_use_percent
+	
+	, sum(type3_use) as type3_use
+	, Round(sum(type3_use) * 100 / count(training_code),2) as type3_use_percent
+	
+	, sum(register_cnt) as register_cnt
+	, Round(sum(register_cnt) * 100 / count(training_code),2) as register_cnt_percent
+	from (		
+		select 
+			b.code
+			, a.code as training_code
+			, a.send_email
+			, send_name
+			, a.start_date
+			, a.end_date	
+			, a.tname
+			, a.training_type1
+			, a.training_type2
+			, a.training_type3			
+			, 	(case 
+					when (b.type1_use='' or b.type1_use IS NULL) then '0' 
+					when DATE_FORMAT(b.type1_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0' 
+					ELSE '1'
+				end) AS type1_use
+			, 	(case 
+					when (b.type2_use='' or b.type2_use IS NULL) then '0' 
+					when DATE_FORMAT(b.type2_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0' 
+					ELSE '1'
+				end) AS type2_use
+			, 	(case 
+					when (b.type3_use='' or b.type3_use IS NULL) then '0' 
+					when DATE_FORMAT(b.type3_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0' 
+					ELSE '1'
+				end) AS type3_use
+			, AES_DECRYPT(UNHEX(c.email), (select secret_key from i_configuration where code=1)) as email 
+			, AES_DECRYPT(UNHEX(c.name), (select secret_key from i_configuration where code=1)) as name  
+			, c.department_name
+			, c.unikey 
+			, b.sdate
+			, b.send_date
+			, (select count(*) 
+				from i_training_register
+				where training_code = c.training_code and email = c.email and name=c.name
+				and DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')				
+			) as register_cnt
+			]]> 	
+		from i_training as a, i_training_log as b, i_training_user as c
+		where
+			a.code = b.training_code 
+		and
+			a.ig_code =#{ig_code}
+		and
+			b.training_user_code = c.code
+		and 
+			 	b.status = 'end'
+		) as tb 
+		group by training_code
+ 	</select>
+ 	
+ 	<select id="selectTrainingRegisterList" parameterType="kr.nshare.training.service.TrainingRegisterVO" resultType="kr.nshare.training.service.TrainingRegisterVO">
+ 		<![CDATA[
+ 	select * from 
+ 	(
+ 		select 
+			(@ROWNUM := @ROWNUM + 1)  as code
+			,training_code
+			,AES_DECRYPT(UNHEX(a.email), (select secret_key from i_configuration where code=1)) as email
+			,AES_DECRYPT(UNHEX(a.name), (select secret_key from i_configuration where code=1)) as name
+			,title
+			,content
+			,sdate
+			,matching_flag
+			,check_mail_status
+			,tg_code
+			,(case 
+					when (type1_use='' or type1_use IS NULL) then 'X' 
+					ELSE 'O'
+				end) AS type1_use
+			,if(type1_date is not null,type1_date,'') as type1_date
+			,if(register_time is not null,register_time,'') as register_time  
+	 		, (case
+	 				when type1_use is null  || type1_date is null || register_time is null then
+		    				'-'
+		    		when type1_use =''  || type1_date ='' || register_time ='' then
+		    				'-'
+					 when DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT((type1_date+INTERVAL register_time MINUTE),'%Y%m%d%H%i%s') then
+					      '-'
+					when TIME_FORMAT(TIMEDIFF(sdate,(type1_date+INTERVAL register_time MINUTE)),'%H%i') ='0000' then
+						TIME_FORMAT(TIMEDIFF(sdate,(type1_date+INTERVAL register_time MINUTE)),'%s초')
+					when TIME_FORMAT(TIMEDIFF(sdate,(type1_date+INTERVAL register_time MINUTE)),'%H') ='00' then
+						TIME_FORMAT(TIMEDIFF(sdate,(type1_date+INTERVAL register_time MINUTE)),'%i분%s초')
+					else
+						TIME_FORMAT(TIMEDIFF(sdate,(type1_date+INTERVAL register_time MINUTE)),'%H시%i분%s초')
+				end) as register_excess_time  
+			 , (case
+					when type1_use is null  || type1_date is null || register_time is null then
+		    				'-'
+					when type1_use =''  || type1_date ='' || register_time ='' then
+	    				'-'
+					when DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT((type1_date+INTERVAL register_time MINUTE),'%Y%m%d%H%i%s') then
+							'O'
+						else
+							'X'
+				end) as registertime_use
+	from (	select sa1.*
+		 		from i_training_register as sa1, i_training as sb1  
+		 		where training_code = #{training_code}
+				 and sa1.training_code = sb1.code
+				 and  DATE_FORMAT(sa1.sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(sb1.end_date,'%Y%m%d%H%i%s')
+		 	)as a	left join (select (case 
+												when (sa.type1_use='' or sa.type1_use IS NULL) then '' 
+												when DATE_FORMAT(sa.type1_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(sc.end_date,'%Y%m%d%H%i%s') then ''
+		 										ELSE sa.type1_use
+										  end) AS type1_use
+										,(case 
+												when (sa.type1_date='' or sa.type1_date IS NULL) then '' 
+												when DATE_FORMAT(sa.type1_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(sc.end_date,'%Y%m%d%H%i%s') then ''
+		 										ELSE sa.type1_date
+										  end) AS type1_date								
+											,sb.name
+											,sb.email
+											, sc.register_time
+											,sc.end_date
+									 from i_training_log as sa, i_training_user as sb , i_training as sc  
+									 where 
+									 		sa.training_code = #{training_code}
+										 and sa.training_code= sc.code
+										 and sa.status='end' 
+										 and sa.training_user_code=sb.code
+									) as b 
+									on a.name = b.name and a.email =b.email		
+									,(SELECT @ROWNUM := 0) R 	
+									]]>
+		where 
+			1=1
+ 			<if test="searchKeyword!=null and searchKeyword != ''">
+    		    		
+			<if test="searchCondition=='name'">	
+				and  AES_DECRYPT(UNHEX(a.name), (select secret_key from i_configuration where code=1)) like concat(#{searchKeyword},'%')
+			</if>
+			<if test="searchCondition=='email'">	
+				and  AES_DECRYPT(UNHEX(a.email), (select secret_key from i_configuration where code=1)) like concat(#{searchKeyword},'%')
+			</if>
+		</if>
+		) as tb
+		where 
+		  1=1
+		 <choose>
+		    <when test="sortcolumn == 'code'">
+		    	 order by code ${orderBy} 
+		    </when>
+		   <when test="sortcolumn == 'title'">
+		    	 order by title ${orderBy} 
+		    </when>
+		    <when test="sortcolumn == 'email'">
+		    	 order by email ${orderBy} 
+		    </when>
+		    <when test="sortcolumn == 'name'">
+		    	 order by name ${orderBy} 
+		    </when>
+		    <when test="sortcolumn == 'matching_flag'">
+		    	 order by matching_flag ${orderBy} 
+		    </when>
+		    <when test="sortcolumn == 'type1_use'">
+		    	 order by type1_use ${orderBy} 
+		    </when>
+		    <when test="sortcolumn == 'type1_date'">
+		    	 order by type1_date ${orderBy} 
+		    </when>
+		    <when test="sortcolumn == 'sdate'">
+		    	 order by sdate ${orderBy} 
+		    </when>
+		    <when test="sortcolumn == 'registertime_use'">
+		    	 order by registertime_use ${orderBy} 
+		    </when>
+		    <otherwise>
+		     	order by code asc 
+		    </otherwise>
+		 </choose>
+			limit #{startRowNum}, ${pageSize} 
+ 	</select> 
+ 	
+ 		
+ 	<select id="selectTrainingRegisterListCnt" parameterType="kr.nshare.training.service.TrainingRegisterVO" resultType="java.lang.Integer">
+ 		<![CDATA[
+ 		select 
+			count(*)
+			
+		from (
+				select sa1.*
+			 		from i_training_register as sa1, i_training as sb1  
+			 		where training_code = #{training_code}
+					 and sa1.training_code = sb1.code
+					 and  DATE_FORMAT(sa1.sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(sb1.end_date,'%Y%m%d%H%i%s')
+			 	)as a	left join (select (case 
+													when (sa.type1_use='' or sa.type1_use IS NULL) then '' 
+													when DATE_FORMAT(sa.type1_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(sc.end_date,'%Y%m%d%H%i%s') then ''
+			 										ELSE sa.type1_use
+											  end) AS type1_use
+											,(case 
+													when (sa.type1_date='' or sa.type1_date IS NULL) then '' 
+													when DATE_FORMAT(sa.type1_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(sc.end_date,'%Y%m%d%H%i%s') then ''
+			 										ELSE sa.type1_date
+											  end) AS type1_date								
+												,sb.name
+												,sb.email
+												, sc.register_time
+												,sc.end_date
+										 from i_training_log as sa, i_training_user as sb , i_training as sc  
+										 where 
+										 		sa.training_code = #{training_code}
+											 and sa.training_code= sc.code
+											 and sa.status='end' 
+											 and sa.training_user_code=sb.code
+										) as b 
+										on a.name = b.name and a.email =b.email		
+			]]>
+			where 
+				1=1
+		<if test="searchKeyword!=null and searchKeyword != ''">
+			<if test="searchCondition=='name'">	
+				and  AES_DECRYPT(UNHEX(a.name), (select secret_key from i_configuration where code=1)) like concat(#{searchKeyword},'%')
+			</if>
+			<if test="searchCondition=='email'">	
+				and  AES_DECRYPT(UNHEX(a.email), (select secret_key from i_configuration where code=1)) like concat(#{searchKeyword},'%')
+			</if>
+		</if>
+ 	</select>
+ 	
+ 	<select id="selectTrainingRegisterListCntExceptReduplication" parameterType="kr.nshare.training.service.TrainingRegisterVO" resultType="java.lang.Integer">
+	<![CDATA[
+	select count(*)
+ 	 from 
+ 	(
+ 			select 
+			a.training_code
+			,AES_DECRYPT(UNHEX(a.email), (select secret_key from i_configuration where code=1)) as email
+			,AES_DECRYPT(UNHEX(a.name), (select secret_key from i_configuration where code=1)) as name
+			,a.title
+			,a.content
+			,a.sdate
+			,a.matching_flag
+			,a.check_mail_status
+			,a.tg_code
+			,(case 
+					when (b.type1_use='' or b.type1_use IS NULL) then 'X' 
+					ELSE 'O'
+				end) AS type1_use
+			,if(b.type1_date is not null,b.type1_date,'') as type1_date
+			,if(b.register_time is not null,b.register_time,'') as register_time  
+	 		, (case
+	 				when b.type1_use is null  || b.type1_date is null || b.register_time is null then
+		    				'-'
+		    		when b.type1_use =''  || b.type1_date ='' || b.register_time ='' then
+		    				'-'
+					 when DATE_FORMAT(a.sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT((b.type1_date+INTERVAL b.register_time MINUTE),'%Y%m%d%H%i%s') then
+					      '-'
+					when TIME_FORMAT(TIMEDIFF(a.sdate,(b.type1_date+INTERVAL b.register_time MINUTE)),'%H%i') ='0000' then
+						TIME_FORMAT(TIMEDIFF(a.sdate,(b.type1_date+INTERVAL b.register_time MINUTE)),'%s초')
+					when TIME_FORMAT(TIMEDIFF(a.sdate,(b.type1_date+INTERVAL b.register_time MINUTE)),'%H') ='00' then
+						TIME_FORMAT(TIMEDIFF(a.sdate,(b.type1_date+INTERVAL b.register_time MINUTE)),'%i분%s초')
+					else
+						TIME_FORMAT(TIMEDIFF(a.sdate,(b.type1_date+INTERVAL b.register_time MINUTE)),'%H시%i분%s초')
+				end) as register_excess_time  
+			 , (case
+					when b.type1_use is null  || b.type1_date is null || b.register_time is null then
+		    				'-'
+					when b.type1_use =''  || b.type1_date ='' || b.register_time ='' then
+	    				'-'
+					when DATE_FORMAT(a.sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT((b.type1_date+INTERVAL b.register_time MINUTE),'%Y%m%d%H%i%s') then
+							'O'
+						else
+							'X'
+				end) as registertime_use
+		
+ 		from ( 
+		 		select a1.*
+			 	from (
+						 	SELECT  sa1.* 
+					 		FROM 	i_training_register as sa1, (SELECT training_code,email,name,min(sdate) as sdate
+																		FROM i_training_register 
+																		where 
+																			training_code = #{training_code}
+																		and
+																			matching_flag in ('C_Y','Y')
+																		GROUP BY email,name,training_code) as sb1
+							where 
+							 sa1.training_code = #{training_code}
+							and 
+							sa1.training_code = sb1.training_code
+							and
+							 sa1.email=sb1.email
+							and
+							  sa1.name=sb1.name
+							and
+							 sa1.sdate=sb1.sdate 
+					) as a1 , i_training as b1
+				where 
+					a1.training_code = b1.code
+				and  
+					DATE_FORMAT(a1.sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(b1.end_date,'%Y%m%d%H%i%s')	
+				 ) as a  , (select 
+										 (case 
+												when (sa2.type1_use='' or sa2.type1_use IS NULL) then '' 
+												when DATE_FORMAT(sa2.type1_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(sc2.end_date,'%Y%m%d%H%i%s') then ''
+		 										ELSE sa2.type1_use
+										  end) AS type1_use
+										,(case 
+												when (sa2.type1_date='' or sa2.type1_date IS NULL) then '' 
+												when DATE_FORMAT(sa2.type1_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(sc2.end_date,'%Y%m%d%H%i%s') then ''
+		 										ELSE sa2.type1_date
+										  end) AS type1_date		
+										,sa2.type1_date_all
+										,sb2.name
+										,sb2.email
+										,sc2.register_time
+								 		,sa2.training_code
+								 from i_training_log as sa2, i_training_user as sb2 ,  i_training as sc2 
+								 where sa2.training_code = #{training_code}
+								 and sa2.training_code= sc2.code
+								 and sa2.training_user_code=sb2.code
+								 and sa2.status='end' 
+								) as b 
+		where
+			 a.training_code = b.training_code	
+		and 
+			a.name = b.name 
+		and 
+			a.email =b.email
+		]]>
+ 			<if test="searchKeyword!=null and searchKeyword != ''">
+    		    		
+			<if test="searchCondition=='name'">	
+				and  AES_DECRYPT(UNHEX(a.name), (select secret_key from i_configuration where code=1)) like concat(#{searchKeyword},'%')
+			</if>
+			<if test="searchCondition=='email'">	
+				and  AES_DECRYPT(UNHEX(a.email), (select secret_key from i_configuration where code=1)) like concat(#{searchKeyword},'%')
+			</if>
+		</if>
+		GROUP BY  a.email,a.name
+	) as tb
+
+ 	</select>
+ 	
+ 	
+ 	<select id="selectTrainingRegisterExceptReduplication" parameterType="kr.nshare.training.service.TrainingRegisterVO" resultType="kr.nshare.training.service.TrainingRegisterVO">
+ 		<![CDATA[
+ 	select (@ROWNUM := @ROWNUM + 1)  as code
+ 			,tb.*
+ 	 from 
+ 	(
+ 			select 
+			a.training_code
+			,AES_DECRYPT(UNHEX(a.email), (select secret_key from i_configuration where code=1)) as email
+			,AES_DECRYPT(UNHEX(a.name), (select secret_key from i_configuration where code=1)) as name
+			,a.title
+			,a.content
+			,a.sdate
+			,a.matching_flag
+			,a.check_mail_status
+			,a.tg_code
+			,(case 
+					when (b.type1_use='' or b.type1_use IS NULL) then 'X' 
+					ELSE 'O'
+				end) AS type1_use
+			,if(b.type1_date is not null,b.type1_date,'') as type1_date
+			,if(b.register_time is not null,b.register_time,'') as register_time  
+	 		, (case
+	 				when b.type1_use is null  || b.type1_date is null || b.register_time is null then
+		    				'-'
+		    		when b.type1_use =''  || b.type1_date ='' || b.register_time ='' then
+		    				'-'
+					 when DATE_FORMAT(a.sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT((b.type1_date+INTERVAL b.register_time MINUTE),'%Y%m%d%H%i%s') then
+					      '-'
+					when TIME_FORMAT(TIMEDIFF(a.sdate,(b.type1_date+INTERVAL b.register_time MINUTE)),'%H%i') ='0000' then
+						TIME_FORMAT(TIMEDIFF(a.sdate,(b.type1_date+INTERVAL b.register_time MINUTE)),'%s초')
+					when TIME_FORMAT(TIMEDIFF(a.sdate,(b.type1_date+INTERVAL b.register_time MINUTE)),'%H') ='00' then
+						TIME_FORMAT(TIMEDIFF(a.sdate,(b.type1_date+INTERVAL b.register_time MINUTE)),'%i분%s초')
+					else
+						TIME_FORMAT(TIMEDIFF(a.sdate,(b.type1_date+INTERVAL b.register_time MINUTE)),'%H시%i분%s초')
+				end) as register_excess_time  
+			 , (case
+					when b.type1_use is null  || b.type1_date is null || b.register_time is null then
+		    				'-'
+					when b.type1_use =''  || b.type1_date ='' || b.register_time ='' then
+	    				'-'
+					when DATE_FORMAT(a.sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT((b.type1_date+INTERVAL b.register_time MINUTE),'%Y%m%d%H%i%s') then
+							'O'
+						else
+							'X'
+				end) as registertime_use
+		
+ 		from ( 
+		 		select a1.*
+			 	from (
+						 	SELECT  sa1.* 
+					 		FROM 	i_training_register as sa1, (SELECT training_code,email,name,min(sdate) as sdate
+																		FROM i_training_register 
+																		where 
+																			training_code = #{training_code}
+																		and
+																			matching_flag in ('C_Y','Y')
+																		GROUP BY email,name,training_code) as sb1
+							where 
+							 sa1.training_code = #{training_code}
+							and 
+							sa1.training_code = sb1.training_code
+							and
+							 sa1.email=sb1.email
+							and
+							  sa1.name=sb1.name
+							and
+							 sa1.sdate=sb1.sdate 
+					) as a1 , i_training as b1
+				where 
+					a1.training_code = b1.code
+				and  
+					DATE_FORMAT(a1.sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(b1.end_date,'%Y%m%d%H%i%s')	
+				 ) as a  , (select 
+										 (case 
+												when (sa2.type1_use='' or sa2.type1_use IS NULL) then '' 
+												when DATE_FORMAT(sa2.type1_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(sc2.end_date,'%Y%m%d%H%i%s') then ''
+		 										ELSE sa2.type1_use
+										  end) AS type1_use
+										,(case 
+												when (sa2.type1_date='' or sa2.type1_date IS NULL) then '' 
+												when DATE_FORMAT(sa2.type1_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(sc2.end_date,'%Y%m%d%H%i%s') then ''
+		 										ELSE sa2.type1_date
+										  end) AS type1_date		
+										,sa2.type1_date_all
+										,sb2.name
+										,sb2.email
+										,sc2.register_time
+								 		,sa2.training_code
+								 from i_training_log as sa2, i_training_user as sb2 ,  i_training as sc2 
+								 where sa2.training_code = #{training_code}
+								 and sa2.training_code= sc2.code
+								 and sa2.training_user_code=sb2.code
+								 and sa2.status='end' 
+								) as b 
+		where
+			 a.training_code = b.training_code	
+		and 
+			a.name = b.name 
+		and 
+			a.email =b.email
+		]]>
+ 			<if test="searchKeyword!=null and searchKeyword != ''">
+    		    		
+			<if test="searchCondition=='name'">	
+				and  AES_DECRYPT(UNHEX(a.name), (select secret_key from i_configuration where code=1)) like concat(#{searchKeyword},'%')
+			</if>
+			<if test="searchCondition=='email'">	
+				and  AES_DECRYPT(UNHEX(a.email), (select secret_key from i_configuration where code=1)) like concat(#{searchKeyword},'%')
+			</if>
+		</if>
+		GROUP BY  a.email,a.name
+		order by a.code asc
+	) as tb ,(SELECT @ROWNUM := 0) R 	
+	where 
+	 	1=1
+		 <choose>
+		    <when test="sortcolumn == 'code'">
+		    	 order by code ${orderBy} 
+		    </when>
+		   <when test="sortcolumn == 'title'">
+		    	 order by title ${orderBy} 
+		    </when>
+		    <when test="sortcolumn == 'email'">
+		    	 order by email ${orderBy} 
+		    </when>
+		    <when test="sortcolumn == 'name'">
+		    	 order by name ${orderBy} 
+		    </when>
+		    <when test="sortcolumn == 'matching_flag'">
+		    	 order by matching_flag ${orderBy} 
+		    </when>
+		    <when test="sortcolumn == 'type1_use'">
+		    	 order by type1_use ${orderBy} 
+		    </when>
+		    <when test="sortcolumn == 'type1_date'">
+		    	 order by type1_date ${orderBy} 
+		    </when>
+		    <when test="sortcolumn == 'sdate'">
+		    	 order by sdate ${orderBy} 
+		    </when>
+		    <when test="sortcolumn == 'registertime_use'">
+		    	 order by registertime_use ${orderBy} 
+		    </when>
+		    <otherwise>
+		     	order by code asc 
+		    </otherwise>
+		 </choose>
+    	 limit #{startRowNum}, ${pageSize} 
+ 	</select> 
+ 	
+ 	<!--  -->
+ 	<select id="selectTrainingListByGroupCode" parameterType="kr.nshare.training.service.TrainingVO" resultType="kr.nshare.training.service.TrainingVO">
+ 		select * from i_training 
+ 				where 
+ 					ig_code = #{ig_code} 	
+ 				order by code desc 
+ 	
+ 	</select>
+ 	
+ 	<select id="selectGroupList" parameterType="kr.nshare.training.service.TrainingVO" resultType="kr.nshare.training.service.TrainingVO">
+ 		select * from i_group where institution_code = #{institution_code} order by code desc 
+ 	</select>
+ 	
+ 	<!-- 그룹별 훈련 통계 -->
+ 	<select id="selectGroupStatisticalByGroup_code" parameterType="java.util.List" resultType="kr.nshare.statistics.service.StatisticsVO">
+ 		<![CDATA[
+ 		select 
+			training_code
+			, ig_code
+			, group_name
+			, sdate
+			, tname
+			, training_type1
+			, training_type2
+			, training_type3
+			, count(training_code) as total 
+			, sum(type1_use) as type1_use
+			, Round(sum(type1_use) * 100 / count(training_code),2) as type1_use_percent
+			
+			, sum(type2_use) as type2_use
+			, Round(sum(type2_use) * 100 / count(training_code),2) as type2_use_percent
+			
+			, sum(type3_use) as type3_use
+			, Round(sum(type3_use) * 100 / count(training_code),2) as type3_use_percent
+			
+			, sum(register_cnt) as register_cnt
+			, Round(sum(register_cnt) * 100 / count(training_code),2) as register_cnt_percent
+			
+			, sum(type1_register_cnt) as type1_register_cnt
+			, Round(sum(type1_register_cnt) * 100 / count(type1_use),2) as type1_register_cnt_percent
+			from (			
+				select 
+					b.code
+					, a.ig_code
+					, d.group_name
+					, d.sdate
+					, a.code as training_code
+					, a.send_email
+					, a.send_name
+					, a.training_type1
+					, a.training_type2
+					, a.training_type3
+					, if( a.training_type1='Y', '1', '0') AS training_type1_cal
+					, if( a.training_type2='Y', '1', '0') AS training_type2_cal
+					, if( a.training_type3='Y', '1', '0') AS training_type3_cal
+					, a.start_date
+					, a.end_date	
+					, a.tname
+					,(case 
+			        		when b.type1_use='' or b.type1_use IS NULL then '0' 
+					  		when DATE_FORMAT(b.type1_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0' 
+							ELSE '1'
+						 end) AS type1_use
+		         ,(case 
+					  		when b.type2_use='' or b.type2_use IS NULL then '0' 
+							when DATE_FORMAT(b.type2_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0' 
+							ELSE '1' 
+				 		end) AS type2_use
+		         ,(case 
+			        		when b.type3_use='' or b.type3_use IS NULL then '0' 
+					  		when DATE_FORMAT(b.type3_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0' 
+							ELSE '1' 
+						end) AS type3_use
+					,AES_DECRYPT(UNHEX(c.email), (select secret_key from i_configuration where code=1)) as email
+					,AES_DECRYPT(UNHEX(c.name), (select secret_key from i_configuration where code=1)) as name
+					, c.department_name
+					, c.unikey 
+					, (
+							select count(DISTINCT email) 
+							from i_training_register 
+							where training_code = c.training_code and email = c.email and name=c.name
+							and DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+						) as register_cnt
+					, (
+							select count(DISTINCT email) 
+							from i_training_register 
+							where training_code = c.training_code and email = c.email and name=c.name 
+							and b.type1_use != ''
+							and DATE_FORMAT(b.type1_date ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+							and DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+						) as type1_register_cnt
+				from i_training as a, i_training_log as b, i_training_user as c, i_group as d
+				where
+					a.code = b.training_code
+				and
+					b.training_user_code = c.code
+				and 	
+					a.ig_code = d.code
+				and 
+			 		b.status = 'end'
+			 		]]>
+				and 
+					a.ig_code in (
+	    				<foreach collection="list" item="element" separator=" , ">#{element.ig_code}</foreach>
+	    			)
+			) as tb
+		group by ig_code
+		order by sdate asc
+ 	</select>
+ 	
+ 	<!-- 전달받은 신고내역에 대한 매칭 유무를 확인함  -->
+    <select id="selectMatchedTraininguser" parameterType="kr.nshare.training.service.TrainingVO" resultType="kr.nshare.training.service.TrainingVO">
+    	select 
+    		a.code
+			,AES_DECRYPT(UNHEX(a.email), (select secret_key from i_configuration where code=1)) as email
+			,a.training_code
+			,AES_DECRYPT(UNHEX(a.name), (select secret_key from i_configuration where code=1)) as name
+			,a.department_name
+			,a.unikey
+			,a.sdate
+			,a.udate
+			,a.tg_code
+			, b.send_date
+    	from i_training_user as a, i_training_log as b
+    		where 
+    			a.code=b.training_user_code
+    		and
+	        	 a.training_code = #{training_code}
+	        and
+	        	AES_DECRYPT(UNHEX(a.name), (select secret_key from i_configuration where code=1)) = #{name}
+	    	and
+	    		AES_DECRYPT(UNHEX(a.email), (select secret_key from i_configuration where code=1)) = #{email}
+	    	and
+	        	b.status= 'end'	
+	        limit 1
+    </select>
+    
+ 	<!-- 템플릿 엑셀 보고서용 쿼리 -->
+    <select id="selectTemplateExcelRoport" parameterType="String" resultType="HashMap">
+    	<![CDATA[
+    	select
+    		training_code
+		  ,institution_name
+		  ,tname
+		  ,if(all_send_type='N', concat('총 ',all_total,'명(발송인원:',total,'명)'), concat('총 ',total,'명')) as total
+		  , start_date
+		  , end_date
+		  , gp_title
+		  , if(training_type1='Y', concat(type1_use,'명(',type1_use_percent,'%)'), '-') as type1_use
+		  , if(training_type2='Y', concat(type2_use,'명(',type2_use_percent,'%)'), '-') as type2_use
+		  , if(training_type3='Y', concat(type3_use,'명(',type3_use_percent,'%)'), '-') as type3_use
+		  ,(case 
+					when training_type1='N' or register_type ='n' THEN '-'
+					when type1_register_cnt is null or type1_register_cnt_percent is null THEN '0명(0.00%)'
+					when type1_register_cnt ='' or type1_register_cnt_percent ='' THEN '0명(0.00%)'
+					else 
+						concat(type1_register_cnt,'명(',type1_register_cnt_percent,'%)')
+					END
+			) as type1_register
+		   ,(case 
+					when training_type2='N' or register_type ='n' THEN '-'
+					when type2_register_cnt is null or type2_register_cnt_percent is null THEN '0명(0.00%)'
+					when type2_register_cnt ='' or type2_register_cnt_percent ='' THEN '0명(0.00%)'
+					else 
+						concat(type2_register_cnt,'명(',type2_register_cnt_percent,'%)')
+					END
+			) as type2_register
+			 ,(case 
+					when training_type3='N' or register_type ='n' THEN '-'
+					when type3_register_cnt is null or type3_register_cnt_percent is null THEN '0명(0.00%)'
+					when type3_register_cnt ='' or type3_register_cnt_percent ='' THEN '0명(0.00%)'
+					else 
+						concat(type3_register_cnt,'명(',type3_register_cnt_percent,'%)')
+					END
+			) as type3_register
+		  ,(case 
+					when training_type1='N' or register_type ='n' or register_time_type ='N' THEN '-'
+					when type1_registertime_cnt is null or type1_registertime_cnt_percent is null THEN '0명(0.00%)'
+					when type1_registertime_cnt ='' or type1_registertime_cnt_percent ='' THEN '0명(0.00%)'
+					else 
+						concat(type1_registertime_cnt,'명(',type1_registertime_cnt_percent,'%)')
+					END
+			) as type1_registertime
+		  ,(case 
+					when training_type2='N' or register_type ='n' or register_time_type ='N' THEN '-'
+					when type2_registertime_cnt is null or type2_registertime_cnt_percent is null THEN '0명(0.00%)'
+					when type2_registertime_cnt ='' or type2_registertime_cnt_percent ='' THEN '0명(0.00%)'
+					else 
+						concat(type2_registertime_cnt,'명(',type2_registertime_cnt_percent,'%)')
+					END
+			) as type2_registertime
+			,(case 
+					when training_type3='N' or register_type ='n' or register_time_type ='N' THEN '-'
+					when type3_registertime_cnt is null or type3_registertime_cnt_percent is null THEN '0명(0.00%)'
+					when type3_registertime_cnt ='' or type3_registertime_cnt_percent ='' THEN '0명(0.00%)'
+					else 
+						concat(type3_registertime_cnt,'명(',type3_registertime_cnt_percent,'%)')
+					END
+			) as type3_registertime
+		  , if(register_type ='y' and register_time_type ='Y' and register_time is not null, concat('신고준수시간 : ',register_time,'분 이내'),'') as register_time
+from(
+	select
+			  training_code
+			  ,institution_name
+			  , tname
+			  , count(training_code) as total
+			  , (select count(*) from i_training_user where training_code=tb.training_code) as all_total
+			  , start_date
+			  , end_date
+			  ,register_type
+			  ,register_time_type
+			  ,register_time
+			  ,all_send_type
+			  ,send_percent
+			  ,send_number	
+			  , (case 
+					when type = '0' THEN title
+					when type = '1'  THEN  (select group_concat(gp_title separator '\n') as gp_title from i_training_grp where training_code= tb.training_code) 
+					else title
+					END
+				 ) as gp_title
+			  , (case when sum(training_type1)>0 then 'Y' else 'N' end) as training_type1
+			  , (case when sum(training_type2)>0 then 'Y' else 'N' end) as training_type2
+			  , (case when sum(training_type3)>0 then 'Y' else 'N' end) as training_type3
+			  , sum(training_type1) AS training_type1_cal 
+			  , sum(training_type2) AS training_type2_cal 
+			  , sum(training_type3) AS training_type3_cal 		  
+			  , sum(type1_use) as type1_use
+			  , Round(sum(type1_use) * 100 / sum(training_type1),2) as type1_use_percent
+			  , sum(type2_use) as type2_use
+			  , Round(sum(type2_use) * 100 / sum(training_type2),2) as type2_use_percent
+			  , sum(type3_use) as type3_use
+			  , Round(sum(type3_use) * 100 / sum(training_type3),2) as type3_use_percent
+			  , sum(register_cnt) as register_cnt
+			  , if( Round(sum(register_cnt) * 100 / count(training_code),2) > 100 , '100.00', Round(sum(register_cnt) * 100 / count(training_code),2)) as register_cnt_percent
+			  , sum(type1_register_cnt) as type1_register_cnt
+			  , if( Round(sum(type1_register_cnt) * 100 / sum(type1_use),2) > 100 , '100.00', Round(sum(type1_register_cnt) * 100 / sum(type1_use),2)) as type1_register_cnt_percent
+			  , sum(type2_register_cnt) as type2_register_cnt
+			  , if( Round(sum(type2_register_cnt) * 100 / sum(type2_use),2) > 100 , '100.00', Round(sum(type2_register_cnt) * 100 / sum(type2_use),2)) as type2_register_cnt_percent
+			  , sum(type3_register_cnt) as type3_register_cnt
+			  , if( Round(sum(type3_register_cnt) * 100 / sum(type3_use),2) > 100 , '100.00', Round(sum(type3_register_cnt) * 100 / sum(type3_use),2)) as type3_register_cnt_percent
+			  , sum(type1_registertime_cnt) as type1_registertime_cnt
+			  , if( Round(sum(type1_registertime_cnt) * 100 / sum(type1_use),2) > 100 , '100.00', Round(sum(type1_registertime_cnt) * 100 / sum(type1_use),2)) as type1_registertime_cnt_percent
+			  , sum(type2_registertime_cnt) as type2_registertime_cnt
+			  , if( Round(sum(type2_registertime_cnt) * 100 / sum(type2_use),2) > 100 , '100.00', Round(sum(type2_registertime_cnt) * 100 / sum(type2_use),2)) as type2_registertime_cnt_percent
+	 		  , sum(type3_registertime_cnt) as type3_registertime_cnt
+			  , if( Round(sum(type3_registertime_cnt) * 100 / sum(type3_use),2) > 100 , '100.00', Round(sum(type3_registertime_cnt) * 100 / sum(type3_use),2)) as type3_registertime_cnt_percent
+	from (select
+						b.code,
+				        a.code as training_code,
+				      	a.type,
+				        a.send_email,
+				        a.title,
+				        a.register_type,
+				        a.register_time_type,
+				        a.register_time,
+				        a.send_name,
+						  a.all_send_type,
+						  a.send_percent,
+						  a.send_number,			       
+				        d.institution_name,
+				        (
+							case 
+								when a.type = '0' and a.training_type1='Y' then '1'
+								when a.type = '1' AND  (select COUNT(*) from i_training_grp where training_code = a.code and training_type1 = 'Y' and code = c.tg_code )>0 THEN '1'
+								else '0' 
+							END
+						) as training_type1,
+				        (
+							case 
+								when a.type = '0' AND a.training_type2 ='Y' THEN '1'
+								when a.type = '1' AND  (select COUNT(*) from i_training_grp where training_code = a.code and training_type2 = 'Y' and code = c.tg_code )>0 THEN '1'
+								else '0'
+							END
+						) as training_type2,
+				
+				        (
+							case 
+								when a.type = '0' AND a.training_type3 ='Y' THEN '1'
+								when a.type = '1' AND  (select COUNT(*) from i_training_grp where training_code = a.code and training_type3 = 'Y' and code = c.tg_code )>0 THEN '1'
+								else '0'
+							END
+						) as training_type3,
+				        if( a.training_type1='Y', '1', '0') AS training_type1_cal,
+				        if( a.training_type2='Y', '1', '0') AS training_type2_cal,
+				        if( a.training_type3='Y', '1', '0') AS training_type3_cal,
+				        a.start_date,
+				        a.end_date,
+				        a.tname,
+				        (case 
+			        		when b.type1_use='' or b.type1_use IS NULL then '0' 
+					  		when DATE_FORMAT(b.type1_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0' 
+							ELSE '1'
+						 end) AS type1_use,
+				        (case 
+						  		when b.type2_use='' or b.type2_use IS NULL then '0' 
+								when DATE_FORMAT(b.type2_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0' 
+								ELSE '1' 
+						end) AS type2_use,
+				        (case 
+				        		when b.type3_use='' or b.type3_use IS NULL then '0' 
+						  		when DATE_FORMAT(b.type3_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0' 
+								ELSE '1' 
+						end) AS type3_use,
+				       (case 
+			        		when b.type1_use='' or b.type1_use IS NULL then '0'
+							when b.type2_use='' or b.type2_use IS NULL  then '0'   
+					  		when DATE_FORMAT(b.type1_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0'  
+							when DATE_FORMAT(b.type2_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0'  
+							ELSE '1' 
+						end) AS type1_2_use,
+				  	  (case 
+					  	  	when b.type1_use='' or b.type1_use IS NULL then '0' 
+							when b.type3_use='' or b.type3_use IS NULL then '0'
+							when DATE_FORMAT(b.type1_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0' 
+							when DATE_FORMAT(b.type3_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0' 
+							ELSE '1' 
+						end) AS type1_3_use,
+					  (case 
+					  		when b.type2_use='' or b.type2_use IS NULL then '0'
+					  		when b.type3_use='' or b.type3_use IS NULL then '0'
+							when DATE_FORMAT(b.type2_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0'
+							when DATE_FORMAT(b.type3_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0'
+							ELSE '1' 
+						end) AS type2_3_use,
+					  (case 
+					  		when b.type1_use='' or b.type1_use IS NULL then '0'
+					  		when b.type2_use='' or b.type2_use IS NULL then '0'
+					  		when b.type3_use='' or b.type3_use IS NULL then '0' 
+					  		when DATE_FORMAT(b.type1_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0' 
+							when DATE_FORMAT(b.type2_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0'
+							when DATE_FORMAT(b.type3_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0'
+							ELSE '1' 
+						end) AS type1_2_3_use,
+						AES_DECRYPT(UNHEX(c.email), (select secret_key from i_configuration where code=1)) as email ,
+						AES_DECRYPT(UNHEX(c.name), (select secret_key from i_configuration where code=1)) as name  ,
+				        c.department_name,
+				        c.unikey,
+				        b.sdate,
+				        b.send_date,
+				       	if( 
+								(	
+									select count(*) 	
+									from i_training_register 
+									where training_code = c.training_code and email = c.email and name=c.name
+									and DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+								) > 0, 1, 0) as register_cnt
+							,
+				       	if( 
+								(	
+									select count(*) 	
+									from i_training_register 
+									where b.type1_use!='' 
+									and DATE_FORMAT(b.type1_date ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+									and training_code = c.training_code and email = c.email and name=c.name 
+									and DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+								) > 0, 1, 0) as type1_register_cnt
+							,
+				       	if( 
+								(	
+									select count(*) 	
+									from i_training_register 
+									where b.type2_use!='' 
+									and DATE_FORMAT(b.type2_date ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+									and training_code = c.training_code and email = c.email and name=c.name 
+									and DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+								) > 0, 1, 0) as type2_register_cnt
+							,
+				       	if( 
+								(	
+									select count(*) 	
+									from i_training_register 
+									where b.type3_use!='' 
+									and DATE_FORMAT(b.type3_date ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+									and training_code = c.training_code and email = c.email and name=c.name 
+									and DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+								) > 0, 1, 0) as type3_register_cnt
+							, (case
+									when b.type1_use is null || a.register_time_type is null then
+						    			0
+									when b.type1_use =''|| a.register_time_type ='N' then 
+										0
+					    			when DATE_FORMAT(b.type1_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then 
+					    				0					    						
+									when DATE_FORMAT(c.register_sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT((b.type1_date+INTERVAL a.register_time MINUTE),'%Y%m%d%H%i%s') then
+											1
+									else
+											0
+								end) as type1_registertime_cnt
+							, (case
+									when b.type2_use is null || a.register_time_type is null then
+						    			0
+									when b.type2_use =''|| a.register_time_type ='N' then
+					    				0
+				    				when DATE_FORMAT(b.type2_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then 
+					    				0		
+									when DATE_FORMAT(c.register_sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT((b.type2_date+INTERVAL a.register_time MINUTE),'%Y%m%d%H%i%s') then
+											1
+									else
+											0
+								end) as type2_registertime_cnt
+							, (case
+									when b.type3_use is null || a.register_time_type is null then
+						    			0
+									when b.type3_use =''|| a.register_time_type ='N' then
+					    				0
+					    			when DATE_FORMAT(b.type3_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then 
+					    				0		
+									when DATE_FORMAT(c.register_sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT((b.type3_date+INTERVAL a.register_time MINUTE),'%Y%m%d%H%i%s') then
+											1
+									else
+											0
+								end) as type3_registertime_cnt
+							]]>
+		      from i_training as a,
+			        i_training_log as b,
+			        (select sa.* , sb.sdate as register_sdate 
+					  	from (select * 
+		  						from i_training_user where  
+	     						training_code in (#{training_code}) 
+								)as sa 
+						left join  (
+											SELECT  ssa.* FROM 
+											i_training_register as ssa, (SELECT training_code,email,name,min(sdate) as sdate
+																					FROM i_training_register 
+																					where matching_flag in ('C_Y','Y')
+																					GROUP BY email,name,training_code
+																				) as ssb
+											where 
+											ssa.training_code = ssb.training_code
+											and
+											 ssa.email=ssb.email
+											and
+											  ssa.name=ssb.name
+											and
+											 ssa.sdate=ssb.sdate 	
+										 ) as sb
+						on sa.name = sb.name and sa.email = sb.email and sa.training_code= sb.training_code
+						) as c,
+			        i_institution as d
+		      where
+					a.code in (#{training_code}) 
+				and 
+			        a.code = b.training_code
+		       and
+					b.training_user_code = c.code
+				and
+				   a.institution_code= d.code
+				and 
+				 	b.status = 'end'
+	) as tb
+) as ttb
+			
+    </select>
+    
+     <!-- 한 훈련에 대한 종합 정보 조회 -->
+    <select id="selectTrainingLogChartReport" parameterType="String" resultType="kr.nshare.statistics.service.StatisticsVO">
+    	<![CDATA[
+    	select
+    		training_code
+		  ,institution_name
+		  , (select group_name from i_group where code = ig_code) as group_name 
+		  ,tname
+		  ,status
+		  , all_total
+		  , total
+		  , start_date
+		  , end_date
+		  , gp_title
+		  , if(training_type1='Y', concat(type1_use,'건(',type1_use_percent,'%)'), '-') as type1_use
+		  , if(training_type2='Y', concat(type2_use,'건(',type2_use_percent,'%)'), '-') as type2_use
+		  , if(training_type3='Y', concat(type3_use,'건(',type3_use_percent,'%)'), '-') as type3_use
+		   ,(case 
+					when register_type ='n' THEN '-'
+					when status ='ready' THEN '-'
+					when register_cnt is null or register_cnt_percent is null THEN '0건(0.00%)'
+					when register_cnt ='' or register_cnt_percent ='' THEN '0건(0.00%)'
+					else 
+						concat(register_cnt,'건(',register_cnt_percent,'%)')
+					END
+			) as register_cnt
+		  ,(case 
+					when training_type1='N' or register_type ='n' THEN '-'
+					when type1_register_cnt is null or type1_register_cnt_percent is null THEN '0건(0.00%)'
+					when type1_register_cnt ='' or type1_register_cnt_percent ='' THEN '0건(0.00%)'
+					else 
+						concat(type1_register_cnt,'건(',type1_register_cnt_percent,'%)')
+					END
+			) as type1_register
+		   ,(case 
+					when training_type2='N' or register_type ='n' THEN '-'
+					when type2_register_cnt is null or type2_register_cnt_percent is null THEN '0건(0.00%)'
+					when type2_register_cnt ='' or type2_register_cnt_percent ='' THEN '0건(0.00%)'
+					else 
+						concat(type2_register_cnt,'건(',type2_register_cnt_percent,'%)')
+					END
+			) as type2_register
+			 ,(case 
+					when training_type3='N' or register_type ='n' THEN '-'
+					when type3_register_cnt is null or type3_register_cnt_percent is null THEN '0건(0.00%)'
+					when type3_register_cnt ='' or type3_register_cnt_percent ='' THEN '0건(0.00%)'
+					else 
+						concat(type3_register_cnt,'건(',type3_register_cnt_percent,'%)')
+					END
+			) as type3_register
+		  ,(case 
+					when training_type1='N' or register_type ='n' or register_time_type ='N' THEN '-'
+					when type1_registertime_cnt is null or type1_registertime_cnt_percent is null THEN '0건(0.00%)'
+					when type1_registertime_cnt ='' or type1_registertime_cnt_percent ='' THEN '0건(0.00%)'
+					else 
+						concat(type1_registertime_cnt,'건(',type1_registertime_cnt_percent,'%)')
+					END
+			) as type1_registertime
+		  ,(case 
+					when training_type2='N' or register_type ='n' or register_time_type ='N' THEN '-'
+					when type2_registertime_cnt is null or type2_registertime_cnt_percent is null THEN '0건(0.00%)'
+					when type2_registertime_cnt ='' or type2_registertime_cnt_percent ='' THEN '0건(0.00%)'
+					else 
+						concat(type2_registertime_cnt,'건(',type2_registertime_cnt_percent,'%)')
+					END
+			) as type2_registertime
+			,(case 
+					when training_type3='N' or register_type ='n' or register_time_type ='N' THEN '-'
+					when type3_registertime_cnt is null or type3_registertime_cnt_percent is null THEN '0건(0.00%)'
+					when type3_registertime_cnt ='' or type3_registertime_cnt_percent ='' THEN '0건(0.00%)'
+					else 
+						concat(type3_registertime_cnt,'건(',type3_registertime_cnt_percent,'%)')
+					END
+			) as type3_registertime
+		  , if(register_type ='y' and register_time_type ='Y' and register_time is not null, concat('신고준수시간 : ',register_time,'분 이내'),'') as register_time
+from(
+	select
+			  training_code
+			  ,institution_name
+			  ,  ig_code		       
+			  , tname
+			  ,status
+			  , count(training_code) as total
+			  , (select count(*) from i_training_user where training_code=tb.training_code) as all_total
+			  , start_date
+			  , end_date
+			  ,register_type
+			  ,register_time_type
+			  ,register_time
+			  ,all_send_type
+			  ,send_percent
+			  ,send_number	
+			  , (case 
+					when type = '0' THEN title
+					when type = '1'  THEN  (select group_concat(gp_title separator '\n') as gp_title from i_training_grp where training_code= tb.training_code) 
+					else title
+					END
+				 ) as gp_title
+			  , (case when sum(training_type1)>0 then 'Y' else 'N' end) as training_type1
+			  , (case when sum(training_type2)>0 then 'Y' else 'N' end) as training_type2
+			  , (case when sum(training_type3)>0 then 'Y' else 'N' end) as training_type3
+			  , sum(training_type1) AS training_type1_cal 
+			  , sum(training_type2) AS training_type2_cal 
+			  , sum(training_type3) AS training_type3_cal 		  
+			  , sum(type1_use) as type1_use
+			  , Round(sum(type1_use) * 100 / sum(training_type1),2) as type1_use_percent
+			  , sum(type2_use) as type2_use
+			  , Round(sum(type2_use) * 100 / sum(training_type2),2) as type2_use_percent
+			  , sum(type3_use) as type3_use
+			  , Round(sum(type3_use) * 100 / sum(training_type3),2) as type3_use_percent
+			  , sum(register_cnt) as register_cnt
+			  , if( Round(sum(register_cnt) * 100 / count(training_code),2) > 100 , '100.00', Round(sum(register_cnt) * 100 / count(training_code),2)) as register_cnt_percent
+			  , sum(type1_register_cnt) as type1_register_cnt
+			  , if( Round(sum(type1_register_cnt) * 100 / sum(type1_use),2) > 100 , '100.00', Round(sum(type1_register_cnt) * 100 / sum(type1_use),2)) as type1_register_cnt_percent
+			  , sum(type2_register_cnt) as type2_register_cnt
+			  , if( Round(sum(type2_register_cnt) * 100 / sum(type2_use),2) > 100 , '100.00', Round(sum(type2_register_cnt) * 100 / sum(type2_use),2)) as type2_register_cnt_percent
+			  , sum(type3_register_cnt) as type3_register_cnt
+			  , if( Round(sum(type3_register_cnt) * 100 / sum(type3_use),2) > 100 , '100.00', Round(sum(type3_register_cnt) * 100 / sum(type3_use),2)) as type3_register_cnt_percent
+			  , sum(type1_registertime_cnt) as type1_registertime_cnt
+			  , if( Round(sum(type1_registertime_cnt) * 100 / sum(type1_use),2) > 100 , '100.00', Round(sum(type1_registertime_cnt) * 100 / sum(type1_use),2)) as type1_registertime_cnt_percent
+			  , sum(type2_registertime_cnt) as type2_registertime_cnt
+			  , if( Round(sum(type2_registertime_cnt) * 100 / sum(type2_use),2) > 100 , '100.00', Round(sum(type2_registertime_cnt) * 100 / sum(type2_use),2)) as type2_registertime_cnt_percent
+	 		  , sum(type3_registertime_cnt) as type3_registertime_cnt
+			  , if( Round(sum(type3_registertime_cnt) * 100 / sum(type3_use),2) > 100 , '100.00', Round(sum(type3_registertime_cnt) * 100 / sum(type3_use),2)) as type3_registertime_cnt_percent
+	from (select
+						b.code,
+				        a.code as training_code,
+				      	a.type,
+				        a.send_email,
+				        a.title,
+				        a.status,
+				        a.register_type,
+				        a.register_time_type,
+				        a.register_time,
+				        a.send_name,
+						  a.all_send_type,
+						  a.send_percent,
+						  a.send_number,	
+						  a.ig_code,		       
+				        d.institution_name,
+				        (
+							case 
+								when a.type = '0' and a.training_type1='Y' then '1'
+								when a.type = '1' AND  (select COUNT(*) from i_training_grp where training_code = a.code and training_type1 = 'Y' and code = c.tg_code )>0 THEN '1'
+								else '0' 
+							END
+						) as training_type1,
+				        (
+							case 
+								when a.type = '0' AND a.training_type2 ='Y' THEN '1'
+								when a.type = '1' AND  (select COUNT(*) from i_training_grp where training_code = a.code and training_type2 = 'Y' and code = c.tg_code )>0 THEN '1'
+								else '0'
+							END
+						) as training_type2,
+				
+				        (
+							case 
+								when a.type = '0' AND a.training_type3 ='Y' THEN '1'
+								when a.type = '1' AND  (select COUNT(*) from i_training_grp where training_code = a.code and training_type3 = 'Y' and code = c.tg_code )>0 THEN '1'
+								else '0'
+							END
+						) as training_type3,
+				        if( a.training_type1='Y', '1', '0') AS training_type1_cal,
+				        if( a.training_type2='Y', '1', '0') AS training_type2_cal,
+				        if( a.training_type3='Y', '1', '0') AS training_type3_cal,
+				        a.start_date,
+				        a.end_date,
+				        a.tname,
+				        (case 
+			        		when b.type1_use='' or b.type1_use IS NULL then '0' 
+					  		when DATE_FORMAT(b.type1_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0' 
+							ELSE '1'
+						 end) AS type1_use,
+				        (case 
+						  		when b.type2_use='' or b.type2_use IS NULL then '0' 
+								when DATE_FORMAT(b.type2_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0' 
+								ELSE '1' 
+						end) AS type2_use,
+				        (case 
+				        		when b.type3_use='' or b.type3_use IS NULL then '0' 
+						  		when DATE_FORMAT(b.type3_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0' 
+								ELSE '1' 
+						end) AS type3_use,
+				       (case 
+			        		when b.type1_use='' or b.type1_use IS NULL then '0'
+							when b.type2_use='' or b.type2_use IS NULL  then '0'   
+					  		when DATE_FORMAT(b.type1_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0'  
+							when DATE_FORMAT(b.type2_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0'  
+							ELSE '1' 
+						end) AS type1_2_use,
+				  	  (case 
+					  	  	when b.type1_use='' or b.type1_use IS NULL then '0' 
+							when b.type3_use='' or b.type3_use IS NULL then '0'
+							when DATE_FORMAT(b.type1_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0' 
+							when DATE_FORMAT(b.type3_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0' 
+							ELSE '1' 
+						end) AS type1_3_use,
+					  (case 
+					  		when b.type2_use='' or b.type2_use IS NULL then '0'
+					  		when b.type3_use='' or b.type3_use IS NULL then '0'
+							when DATE_FORMAT(b.type2_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0'
+							when DATE_FORMAT(b.type3_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0'
+							ELSE '1' 
+						end) AS type2_3_use,
+					  (case 
+					  		when b.type1_use='' or b.type1_use IS NULL then '0'
+					  		when b.type2_use='' or b.type2_use IS NULL then '0'
+					  		when b.type3_use='' or b.type3_use IS NULL then '0' 
+					  		when DATE_FORMAT(b.type1_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0' 
+							when DATE_FORMAT(b.type2_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0'
+							when DATE_FORMAT(b.type3_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0'
+							ELSE '1' 
+						end) AS type1_2_3_use,
+						AES_DECRYPT(UNHEX(c.email), (select secret_key from i_configuration where code=1)) as email ,
+						AES_DECRYPT(UNHEX(c.name), (select secret_key from i_configuration where code=1)) as name  ,
+				        c.department_name,
+				        c.unikey,
+				        b.sdate,
+				        b.send_date,
+				       	if( 
+							(	
+								select count(*) 	
+								from i_training_register 
+								where training_code = c.training_code and email = c.email and name=c.name
+								and DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+							) > 0, 1, 0) as register_cnt
+							,
+				       	if( 
+							(	
+								select count(*) 	
+								from i_training_register 
+								where b.type1_use!='' 
+								and DATE_FORMAT(b.type1_date ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+								and training_code = c.training_code and email = c.email and name=c.name 
+								and DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+							) > 0, 1, 0) as type1_register_cnt
+							,
+				       	if( 
+							(	
+								select count(*) 	
+								from i_training_register 
+								where b.type2_use!='' 
+								and DATE_FORMAT(b.type2_date ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+								and training_code = c.training_code and email = c.email and name=c.name 
+								and DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+							) > 0, 1, 0) as type2_register_cnt
+							,
+				       	if( 
+							(	
+								select count(*) 	
+								from i_training_register 
+								where b.type3_use!='' 
+								and DATE_FORMAT(b.type3_date ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+								and training_code = c.training_code and email = c.email and name=c.name 
+								and DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+							) > 0, 1, 0) as type3_register_cnt
+						, (case
+								when b.type1_use is null || a.register_time_type is null then
+					    			0
+								when b.type1_use =''|| a.register_time_type ='N' then 
+									0
+				    			when DATE_FORMAT(b.type1_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then 
+				    				0					    						
+								when DATE_FORMAT(c.register_sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT((b.type1_date+INTERVAL a.register_time MINUTE),'%Y%m%d%H%i%s') then
+										1
+								else
+										0
+							end) as type1_registertime_cnt
+						, (case
+								when b.type2_use is null || a.register_time_type is null then
+					    			0
+								when b.type2_use =''|| a.register_time_type ='N' then
+				    				0
+			    				when DATE_FORMAT(b.type2_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then 
+				    				0		
+								when DATE_FORMAT(c.register_sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT((b.type2_date+INTERVAL a.register_time MINUTE),'%Y%m%d%H%i%s') then
+										1
+								else
+										0
+							end) as type2_registertime_cnt
+						, (case
+								when b.type3_use is null || a.register_time_type is null then
+					    			0
+								when b.type3_use =''|| a.register_time_type ='N' then
+				    				0
+				    			when DATE_FORMAT(b.type3_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then 
+				    				0		
+								when DATE_FORMAT(c.register_sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT((b.type3_date+INTERVAL a.register_time MINUTE),'%Y%m%d%H%i%s') then
+										1
+								else
+										0
+							end) as type3_registertime_cnt
+							]]>
+		      from i_training as a,
+			        i_training_log as b,
+			        (select sa.* , sb.sdate as register_sdate 
+					  	from (select * 
+		  						from i_training_user where  
+	     						training_code in (#{code}) 
+								)as sa 
+						left join  (
+											SELECT  ssa.* FROM 
+											i_training_register as ssa, (SELECT training_code,email,name,min(sdate) as sdate
+																					FROM i_training_register 
+																					where matching_flag in ('C_Y','Y')
+																					GROUP BY email,name,training_code
+																				) as ssb
+											where 
+											ssa.training_code = ssb.training_code
+											and
+											 ssa.email=ssb.email
+											and
+											  ssa.name=ssb.name
+											and
+											 ssa.sdate=ssb.sdate 	
+										 ) as sb
+						on sa.name = sb.name and sa.email = sb.email and sa.training_code= sb.training_code
+						) as c,
+			        i_institution as d
+		      where
+					a.code in (#{code}) 
+				and 
+			        a.code = b.training_code
+		       and
+					b.training_user_code = c.code
+				and
+				   a.institution_code= d.code
+				and 
+				 	b.status = 'end'
+	) as tb
+) as ttb
+    	
+    </select>
+    
+      <!-- 모든 훈련에 대한 종합 정보 조회 -->
+    <select id="selectTrainingLogChartReportTotal" parameterType="java.util.List"  resultType="kr.nshare.statistics.service.StatisticsVO">
+    	<![CDATA[    	
+    		select
+    		all_total
+		  , total
+		  , if(training_type1='Y', concat(type1_use,'건(',type1_use_percent,'%)'), '-') as type1_use
+		  , if(training_type2='Y', concat(type2_use,'건(',type2_use_percent,'%)'), '-') as type2_use
+		  , if(training_type3='Y', concat(type3_use,'건(',type3_use_percent,'%)'), '-') as type3_use
+		   ,(case 
+					when register_type ='n' THEN '-'
+					when status ='ready' THEN '-'
+					when register_cnt is null or register_cnt_percent is null THEN '0건(0.00%)'
+					when register_cnt ='' or register_cnt_percent ='' THEN '0건(0.00%)'
+					else 
+						concat(register_cnt,'건(',register_cnt_percent,'%)')
+					END
+			) as register_cnt
+		  ,(case 
+					when training_type1='N' or register_type ='n' THEN '-'
+					when type1_register_cnt is null or type1_register_cnt_percent is null THEN '0건(0.00%)'
+					when type1_register_cnt ='' or type1_register_cnt_percent ='' THEN '0건(0.00%)'
+					else 
+						concat(type1_register_cnt,'건(',type1_register_cnt_percent,'%)')
+					END
+			) as type1_register
+		   ,(case 
+					when training_type2='N' or register_type ='n' THEN '-'
+					when type2_register_cnt is null or type2_register_cnt_percent is null THEN '0건(0.00%)'
+					when type2_register_cnt ='' or type2_register_cnt_percent ='' THEN '0건(0.00%)'
+					else 
+						concat(type2_register_cnt,'건(',type2_register_cnt_percent,'%)')
+					END
+			) as type2_register
+			 ,(case 
+					when training_type3='N' or register_type ='n' THEN '-'
+					when type3_register_cnt is null or type3_register_cnt_percent is null THEN '0건(0.00%)'
+					when type3_register_cnt ='' or type3_register_cnt_percent ='' THEN '0건(0.00%)'
+					else 
+						concat(type3_register_cnt,'건(',type3_register_cnt_percent,'%)')
+					END
+			) as type3_register
+		  ,(case 
+					when training_type1='N' or register_type ='n' or register_time_type ='N' THEN '-'
+					when type1_registertime_cnt is null or type1_registertime_cnt_percent is null THEN '0건(0.00%)'
+					when type1_registertime_cnt ='' or type1_registertime_cnt_percent ='' THEN '0건(0.00%)'
+					else 
+						concat(type1_registertime_cnt,'건(',type1_registertime_cnt_percent,'%)')
+					END
+			) as type1_registertime
+		  ,(case 
+					when training_type2='N' or register_type ='n' or register_time_type ='N' THEN '-'
+					when type2_registertime_cnt is null or type2_registertime_cnt_percent is null THEN '0건(0.00%)'
+					when type2_registertime_cnt ='' or type2_registertime_cnt_percent ='' THEN '0건(0.00%)'
+					else 
+						concat(type2_registertime_cnt,'건(',type2_registertime_cnt_percent,'%)')
+					END
+			) as type2_registertime
+			,(case 
+					when training_type3='N' or register_type ='n' or register_time_type ='N' THEN '-'
+					when type3_registertime_cnt is null or type3_registertime_cnt_percent is null THEN '0건(0.00%)'
+					when type3_registertime_cnt ='' or type3_registertime_cnt_percent ='' THEN '0건(0.00%)'
+					else 
+						concat(type3_registertime_cnt,'건(',type3_registertime_cnt_percent,'%)')
+					END
+			) as type3_registertime		
+from(
+]]>
+	select
+			  training_code
+			  ,institution_name
+			  ,  ig_code		       
+			  , tname
+			  ,status
+			  , count(training_code) as total
+			  , (select count(*) from i_training_user where training_code in ( 	<foreach collection="list" item="element" separator=" , ">#{element}</foreach>   ) ) as all_total
+ 			  , start_date
+			  , end_date			
+			  ,register_time
+			  ,all_send_type
+			  ,send_percent
+			  ,send_number	
+			<![CDATA[    	
+			  , (case 
+					when type = '0' THEN title
+					when type = '1'  THEN  (select group_concat(gp_title separator '\n') as gp_title from i_training_grp where training_code= tb.training_code) 
+					else title
+					END
+				 ) as gp_title
+			  , (case when sum(training_type1)>0 then 'Y' else 'N' end) as training_type1
+			  , (case when sum(training_type2)>0 then 'Y' else 'N' end) as training_type2
+			  , (case when sum(training_type3)>0 then 'Y' else 'N' end) as training_type3
+		 	 , (case when sum(register_type)>0 then 'Y' else 'N' end) as register_type
+		 	 , (case when sum(register_time_type)>0 then 'Y' else 'N' end) as register_time_type		 	 
+			  , sum(training_type1) AS training_type1_cal 
+			  , sum(training_type2) AS training_type2_cal 
+			  , sum(training_type3) AS training_type3_cal 		  
+			  , sum(type1_use) as type1_use
+			  , Round(sum(type1_use) * 100 / sum(training_type1),2) as type1_use_percent
+			  , sum(type2_use) as type2_use
+			  , Round(sum(type2_use) * 100 / sum(training_type2),2) as type2_use_percent
+			  , sum(type3_use) as type3_use
+			  , Round(sum(type3_use) * 100 / sum(training_type3),2) as type3_use_percent
+			  , sum(register_cnt) as register_cnt
+			  , if( Round(sum(register_cnt) * 100 / count(training_code),2) > 100 , '100.00', Round(sum(register_cnt) * 100 / count(training_code),2)) as register_cnt_percent
+			  , sum(type1_register_cnt) as type1_register_cnt
+			  , if( Round(sum(type1_register_cnt) * 100 / sum(type1_use),2) > 100 , '100.00', Round(sum(type1_register_cnt) * 100 / sum(type1_use),2)) as type1_register_cnt_percent
+			  , sum(type2_register_cnt) as type2_register_cnt
+			  , if( Round(sum(type2_register_cnt) * 100 / sum(type2_use),2) > 100 , '100.00', Round(sum(type2_register_cnt) * 100 / sum(type2_use),2)) as type2_register_cnt_percent
+			  , sum(type3_register_cnt) as type3_register_cnt
+			  , if( Round(sum(type3_register_cnt) * 100 / sum(type3_use),2) > 100 , '100.00', Round(sum(type3_register_cnt) * 100 / sum(type3_use),2)) as type3_register_cnt_percent
+			  , sum(type1_registertime_cnt) as type1_registertime_cnt
+			  , if( Round(sum(type1_registertime_cnt) * 100 / sum(type1_use),2) > 100 , '100.00', Round(sum(type1_registertime_cnt) * 100 / sum(type1_use),2)) as type1_registertime_cnt_percent
+			  , sum(type2_registertime_cnt) as type2_registertime_cnt
+			  , if( Round(sum(type2_registertime_cnt) * 100 / sum(type2_use),2) > 100 , '100.00', Round(sum(type2_registertime_cnt) * 100 / sum(type2_use),2)) as type2_registertime_cnt_percent
+	 		  , sum(type3_registertime_cnt) as type3_registertime_cnt
+			  , if( Round(sum(type3_registertime_cnt) * 100 / sum(type3_use),2) > 100 , '100.00', Round(sum(type3_registertime_cnt) * 100 / sum(type3_use),2)) as type3_registertime_cnt_percent
+	from (select
+						b.code,
+				        a.code as training_code,
+				      	a.type,
+				        a.send_email,
+				        a.title,
+				        a.status,				      
+				        a.register_time,
+				        a.send_name,
+						  a.all_send_type,
+						  a.send_percent,
+						  a.send_number,	
+						  a.ig_code,		       
+				        d.institution_name,
+				        (
+							case 
+								when a.type = '0' and a.training_type1='Y' then '1'
+								when a.type = '1' AND  (select COUNT(*) from i_training_grp where training_code = a.code and training_type1 = 'Y' and code = c.tg_code )>0 THEN '1'
+								else '0' 
+							END
+						) as training_type1,
+				        (
+							case 
+								when a.type = '0' AND a.training_type2 ='Y' THEN '1'
+								when a.type = '1' AND  (select COUNT(*) from i_training_grp where training_code = a.code and training_type2 = 'Y' and code = c.tg_code )>0 THEN '1'
+								else '0'
+							END
+						) as training_type2,
+				
+				        (
+							case 
+								when a.type = '0' AND a.training_type3 ='Y' THEN '1'
+								when a.type = '1' AND  (select COUNT(*) from i_training_grp where training_code = a.code and training_type3 = 'Y' and code = c.tg_code )>0 THEN '1'
+								else '0'
+							END
+						) as training_type3,
+						 if( a.register_type='Y', '1', '0') AS register_type,
+						 if( a.register_time_type='Y', '1', '0') AS register_time_type,
+						 
+				        if( a.training_type1='Y', '1', '0') AS training_type1_cal,
+				        if( a.training_type2='Y', '1', '0') AS training_type2_cal,
+				        if( a.training_type3='Y', '1', '0') AS training_type3_cal,
+				        a.start_date,
+				        a.end_date,
+				        a.tname,
+				        (case 
+			        		when b.type1_use='' or b.type1_use IS NULL then '0' 
+					  		when DATE_FORMAT(b.type1_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0' 
+							ELSE '1'
+						 end) AS type1_use,
+				        (case 
+						  		when b.type2_use='' or b.type2_use IS NULL then '0' 
+								when DATE_FORMAT(b.type2_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0' 
+								ELSE '1' 
+						end) AS type2_use,
+				        (case 
+				        		when b.type3_use='' or b.type3_use IS NULL then '0' 
+						  		when DATE_FORMAT(b.type3_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0' 
+								ELSE '1' 
+						end) AS type3_use,				       
+						AES_DECRYPT(UNHEX(c.email), (select secret_key from i_configuration where code=1)) as email ,
+						AES_DECRYPT(UNHEX(c.name), (select secret_key from i_configuration where code=1)) as name  ,
+				        c.department_name,
+				        c.unikey,
+				        b.sdate,
+				        b.send_date,
+				       	if( 
+							(	
+								select count(*) 	
+								from i_training_register 
+								where training_code = c.training_code and email = c.email and name=c.name
+								and DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+							) > 0, 1, 0) as register_cnt
+							,
+				       	if( 
+							(	
+								select count(*) 	
+								from i_training_register 
+								where b.type1_use!='' 
+								and DATE_FORMAT(b.type1_date ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+								and training_code = c.training_code and email = c.email and name=c.name 
+								and DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+							) > 0, 1, 0) as type1_register_cnt
+							,
+				       	if( 
+							(	
+								select count(*) 	
+								from i_training_register 
+								where b.type2_use!='' 
+								and DATE_FORMAT(b.type2_date ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+								and training_code = c.training_code and email = c.email and name=c.name 
+								and DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+							) > 0, 1, 0) as type2_register_cnt
+							,
+				       	if( 
+							(	
+								select count(*) 	
+								from i_training_register 
+								where b.type3_use!='' 
+								and DATE_FORMAT(b.type3_date ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+								and training_code = c.training_code and email = c.email and name=c.name 
+								and DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+							) > 0, 1, 0) as type3_register_cnt
+						, (case
+								when b.type1_use is null || a.register_time_type is null then
+					    			0
+								when b.type1_use =''|| a.register_time_type ='N' then 
+									0
+				    			when DATE_FORMAT(b.type1_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then 
+				    				0					    						
+								when DATE_FORMAT(c.register_sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT((b.type1_date+INTERVAL a.register_time MINUTE),'%Y%m%d%H%i%s') then
+										1
+								else
+										0
+							end) as type1_registertime_cnt
+						, (case
+								when b.type2_use is null || a.register_time_type is null then
+					    			0
+								when b.type2_use =''|| a.register_time_type ='N' then
+				    				0
+			    				when DATE_FORMAT(b.type2_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then 
+				    				0		
+								when DATE_FORMAT(c.register_sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT((b.type2_date+INTERVAL a.register_time MINUTE),'%Y%m%d%H%i%s') then
+										1
+								else
+										0
+							end) as type2_registertime_cnt
+						, (case
+								when b.type3_use is null || a.register_time_type is null then
+					    			0
+								when b.type3_use =''|| a.register_time_type ='N' then
+				    				0
+				    			when DATE_FORMAT(b.type3_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then 
+				    				0		
+								when DATE_FORMAT(c.register_sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT((b.type3_date+INTERVAL a.register_time MINUTE),'%Y%m%d%H%i%s') then
+										1
+								else
+										0
+							end) as type3_registertime_cnt
+						]]>
+		      from i_training as a,
+			        i_training_log as b,
+			        (select sa.* , sb.sdate as register_sdate 
+					  	from (select * 
+		  						from i_training_user where  
+	     						training_code in ( 	<foreach collection="list" item="element" separator=" , ">#{element}</foreach>  ) 
+								)as sa 
+						left join  (
+											SELECT  ssa.* FROM 
+											i_training_register as ssa, (SELECT training_code,email,name,min(sdate) as sdate
+																					FROM i_training_register 
+																					where matching_flag in ('C_Y','Y')
+																					GROUP BY email,name,training_code
+																				) as ssb
+											where 
+											ssa.training_code = ssb.training_code
+											and
+											 ssa.email=ssb.email
+											and
+											  ssa.name=ssb.name
+											and
+											 ssa.sdate=ssb.sdate 	
+										 ) as sb
+						on sa.name = sb.name and sa.email = sb.email and sa.training_code= sb.training_code
+						) as c,
+			        i_institution as d
+		      where
+					a.code in ( 
+						<foreach collection="list" item="element" separator=" , ">#{element}</foreach> 
+					 ) 
+				and 
+			        a.code = b.training_code
+		       and
+					b.training_user_code = c.code
+				and
+				   a.institution_code= d.code
+				and 
+				 	b.status = 'end'
+	) as tb
+) as ttb
+    </select>
+    
+       <!-- 모든 훈련에 대한 종합 정보 조회 -->
+    <select id="selectTrainingLogChartReportTotalEXcel" parameterType="java.util.List"  resultType="HashMap">
+    <![CDATA[    	
+    		select
+    		all_total
+		  , total
+		  , if(training_type1='Y', concat(type1_use,'건(',type1_use_percent,'%)'), '-') as type1_use
+		  , if(training_type2='Y', concat(type2_use,'건(',type2_use_percent,'%)'), '-') as type2_use
+		  , if(training_type3='Y', concat(type3_use,'건(',type3_use_percent,'%)'), '-') as type3_use
+		   ,(case 
+					when register_type ='n' THEN '-'
+					when status ='ready' THEN '-'
+					when register_cnt is null or register_cnt_percent is null THEN '0건(0.00%)'
+					when register_cnt ='' or register_cnt_percent ='' THEN '0건(0.00%)'
+					else 
+						concat(register_cnt,'건(',register_cnt_percent,'%)')
+					END
+			) as register_cnt
+		  ,(case 
+					when training_type1='N' or register_type ='n' THEN '-'
+					when type1_register_cnt is null or type1_register_cnt_percent is null THEN '0건(0.00%)'
+					when type1_register_cnt ='' or type1_register_cnt_percent ='' THEN '0건(0.00%)'
+					else 
+						concat(type1_register_cnt,'건(',type1_register_cnt_percent,'%)')
+					END
+			) as type1_register
+		   ,(case 
+					when training_type2='N' or register_type ='n' THEN '-'
+					when type2_register_cnt is null or type2_register_cnt_percent is null THEN '0건(0.00%)'
+					when type2_register_cnt ='' or type2_register_cnt_percent ='' THEN '0건(0.00%)'
+					else 
+						concat(type2_register_cnt,'건(',type2_register_cnt_percent,'%)')
+					END
+			) as type2_register
+			 ,(case 
+					when training_type3='N' or register_type ='n' THEN '-'
+					when type3_register_cnt is null or type3_register_cnt_percent is null THEN '0건(0.00%)'
+					when type3_register_cnt ='' or type3_register_cnt_percent ='' THEN '0건(0.00%)'
+					else 
+						concat(type3_register_cnt,'건(',type3_register_cnt_percent,'%)')
+					END
+			) as type3_register
+		  ,(case 
+					when training_type1='N' or register_type ='n' or register_time_type ='N' THEN '-'
+					when type1_registertime_cnt is null or type1_registertime_cnt_percent is null THEN '0건(0.00%)'
+					when type1_registertime_cnt ='' or type1_registertime_cnt_percent ='' THEN '0건(0.00%)'
+					else 
+						concat(type1_registertime_cnt,'건(',type1_registertime_cnt_percent,'%)')
+					END
+			) as type1_registertime
+		  ,(case 
+					when training_type2='N' or register_type ='n' or register_time_type ='N' THEN '-'
+					when type2_registertime_cnt is null or type2_registertime_cnt_percent is null THEN '0건(0.00%)'
+					when type2_registertime_cnt ='' or type2_registertime_cnt_percent ='' THEN '0건(0.00%)'
+					else 
+						concat(type2_registertime_cnt,'건(',type2_registertime_cnt_percent,'%)')
+					END
+			) as type2_registertime
+			,(case 
+					when training_type3='N' or register_type ='n' or register_time_type ='N' THEN '-'
+					when type3_registertime_cnt is null or type3_registertime_cnt_percent is null THEN '0건(0.00%)'
+					when type3_registertime_cnt ='' or type3_registertime_cnt_percent ='' THEN '0건(0.00%)'
+					else 
+						concat(type3_registertime_cnt,'건(',type3_registertime_cnt_percent,'%)')
+					END
+			) as type3_registertime		
+from(
+]]>
+	select
+			  training_code
+			  ,institution_name
+			  ,  ig_code		       
+			  , tname
+			  ,status
+			  , count(training_code) as total
+			  , (select count(*) from i_training_user where training_code in ( 	<foreach collection="list" item="element" separator=" , ">#{element}</foreach>   ) ) as all_total
+ 			  , start_date
+			  , end_date			
+			  ,register_time
+			  ,all_send_type
+			  ,send_percent
+			  ,send_number	
+			<![CDATA[    	
+			  , (case 
+					when type = '0' THEN title
+					when type = '1'  THEN  (select group_concat(gp_title separator '\n') as gp_title from i_training_grp where training_code= tb.training_code) 
+					else title
+					END
+				 ) as gp_title
+			  , (case when sum(training_type1)>0 then 'Y' else 'N' end) as training_type1
+			  , (case when sum(training_type2)>0 then 'Y' else 'N' end) as training_type2
+			  , (case when sum(training_type3)>0 then 'Y' else 'N' end) as training_type3
+		 	 , (case when sum(register_type)>0 then 'Y' else 'N' end) as register_type
+		 	 , (case when sum(register_time_type)>0 then 'Y' else 'N' end) as register_time_type		 	 
+			  , sum(training_type1) AS training_type1_cal 
+			  , sum(training_type2) AS training_type2_cal 
+			  , sum(training_type3) AS training_type3_cal 		  
+			  , sum(type1_use) as type1_use
+			  , Round(sum(type1_use) * 100 / sum(training_type1),2) as type1_use_percent
+			  , sum(type2_use) as type2_use
+			  , Round(sum(type2_use) * 100 / sum(training_type2),2) as type2_use_percent
+			  , sum(type3_use) as type3_use
+			  , Round(sum(type3_use) * 100 / sum(training_type3),2) as type3_use_percent
+			  , sum(register_cnt) as register_cnt
+			  , if( Round(sum(register_cnt) * 100 / count(training_code),2) > 100 , '100.00', Round(sum(register_cnt) * 100 / count(training_code),2)) as register_cnt_percent
+			  , sum(type1_register_cnt) as type1_register_cnt
+			  , if( Round(sum(type1_register_cnt) * 100 / sum(type1_use),2) > 100 , '100.00', Round(sum(type1_register_cnt) * 100 / sum(type1_use),2)) as type1_register_cnt_percent
+			  , sum(type2_register_cnt) as type2_register_cnt
+			  , if( Round(sum(type2_register_cnt) * 100 / sum(type2_use),2) > 100 , '100.00', Round(sum(type2_register_cnt) * 100 / sum(type2_use),2)) as type2_register_cnt_percent
+			  , sum(type3_register_cnt) as type3_register_cnt
+			  , if( Round(sum(type3_register_cnt) * 100 / sum(type3_use),2) > 100 , '100.00', Round(sum(type3_register_cnt) * 100 / sum(type3_use),2)) as type3_register_cnt_percent
+			  , sum(type1_registertime_cnt) as type1_registertime_cnt
+			  , if( Round(sum(type1_registertime_cnt) * 100 / sum(type1_use),2) > 100 , '100.00', Round(sum(type1_registertime_cnt) * 100 / sum(type1_use),2)) as type1_registertime_cnt_percent
+			  , sum(type2_registertime_cnt) as type2_registertime_cnt
+			  , if( Round(sum(type2_registertime_cnt) * 100 / sum(type2_use),2) > 100 , '100.00', Round(sum(type2_registertime_cnt) * 100 / sum(type2_use),2)) as type2_registertime_cnt_percent
+	 		  , sum(type3_registertime_cnt) as type3_registertime_cnt
+			  , if( Round(sum(type3_registertime_cnt) * 100 / sum(type3_use),2) > 100 , '100.00', Round(sum(type3_registertime_cnt) * 100 / sum(type3_use),2)) as type3_registertime_cnt_percent
+	from (select
+						b.code,
+				        a.code as training_code,
+				      	a.type,
+				        a.send_email,
+				        a.title,
+				        a.status,				      
+				        a.register_time,
+				        a.send_name,
+						  a.all_send_type,
+						  a.send_percent,
+						  a.send_number,	
+						  a.ig_code,		       
+				        d.institution_name,
+				        (
+							case 
+								when a.type = '0' and a.training_type1='Y' then '1'
+								when a.type = '1' AND  (select COUNT(*) from i_training_grp where training_code = a.code and training_type1 = 'Y' and code = c.tg_code )>0 THEN '1'
+								else '0' 
+							END
+						) as training_type1,
+				        (
+							case 
+								when a.type = '0' AND a.training_type2 ='Y' THEN '1'
+								when a.type = '1' AND  (select COUNT(*) from i_training_grp where training_code = a.code and training_type2 = 'Y' and code = c.tg_code )>0 THEN '1'
+								else '0'
+							END
+						) as training_type2,
+				
+				        (
+							case 
+								when a.type = '0' AND a.training_type3 ='Y' THEN '1'
+								when a.type = '1' AND  (select COUNT(*) from i_training_grp where training_code = a.code and training_type3 = 'Y' and code = c.tg_code )>0 THEN '1'
+								else '0'
+							END
+						) as training_type3,
+						 if( a.register_type='Y', '1', '0') AS register_type,
+						 if( a.register_time_type='Y', '1', '0') AS register_time_type,
+						 
+				        if( a.training_type1='Y', '1', '0') AS training_type1_cal,
+				        if( a.training_type2='Y', '1', '0') AS training_type2_cal,
+				        if( a.training_type3='Y', '1', '0') AS training_type3_cal,
+				        a.start_date,
+				        a.end_date,
+				        a.tname,
+				        (case 
+			        		when b.type1_use='' or b.type1_use IS NULL then '0' 
+					  		when DATE_FORMAT(b.type1_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0' 
+							ELSE '1'
+						 end) AS type1_use,
+				        (case 
+						  		when b.type2_use='' or b.type2_use IS NULL then '0' 
+								when DATE_FORMAT(b.type2_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0' 
+								ELSE '1' 
+						end) AS type2_use,
+				        (case 
+				        		when b.type3_use='' or b.type3_use IS NULL then '0' 
+						  		when DATE_FORMAT(b.type3_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0' 
+								ELSE '1' 
+						end) AS type3_use,				       
+						AES_DECRYPT(UNHEX(c.email), (select secret_key from i_configuration where code=1)) as email ,
+						AES_DECRYPT(UNHEX(c.name), (select secret_key from i_configuration where code=1)) as name  ,
+				        c.department_name,
+				        c.unikey,
+				        b.sdate,
+				        b.send_date,
+				       	if( 
+							(	
+								select count(*) 	
+								from i_training_register 
+								where training_code = c.training_code and email = c.email and name=c.name
+								and DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+							) > 0, 1, 0) as register_cnt
+							,
+				       	if( 
+							(	
+								select count(*) 	
+								from i_training_register 
+								where b.type1_use!='' 
+								and DATE_FORMAT(b.type1_date ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+								and training_code = c.training_code and email = c.email and name=c.name 
+								and DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+							) > 0, 1, 0) as type1_register_cnt
+							,
+				       	if( 
+							(	
+								select count(*) 	
+								from i_training_register 
+								where b.type2_use!='' 
+								and DATE_FORMAT(b.type2_date ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+								and training_code = c.training_code and email = c.email and name=c.name 
+								and DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+							) > 0, 1, 0) as type2_register_cnt
+							,
+				       	if( 
+							(	
+								select count(*) 	
+								from i_training_register 
+								where b.type3_use!='' 
+								and DATE_FORMAT(b.type3_date ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+								and training_code = c.training_code and email = c.email and name=c.name 
+								and DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+							) > 0, 1, 0) as type3_register_cnt
+						, (case
+								when b.type1_use is null || a.register_time_type is null then
+					    			0
+								when b.type1_use =''|| a.register_time_type ='N' then 
+									0
+				    			when DATE_FORMAT(b.type1_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then 
+				    				0					    						
+								when DATE_FORMAT(c.register_sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT((b.type1_date+INTERVAL a.register_time MINUTE),'%Y%m%d%H%i%s') then
+										1
+								else
+										0
+							end) as type1_registertime_cnt
+						, (case
+								when b.type2_use is null || a.register_time_type is null then
+					    			0
+								when b.type2_use =''|| a.register_time_type ='N' then
+				    				0
+			    				when DATE_FORMAT(b.type2_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then 
+				    				0		
+								when DATE_FORMAT(c.register_sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT((b.type2_date+INTERVAL a.register_time MINUTE),'%Y%m%d%H%i%s') then
+										1
+								else
+										0
+							end) as type2_registertime_cnt
+						, (case
+								when b.type3_use is null || a.register_time_type is null then
+					    			0
+								when b.type3_use =''|| a.register_time_type ='N' then
+				    				0
+				    			when DATE_FORMAT(b.type3_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then 
+				    				0		
+								when DATE_FORMAT(c.register_sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT((b.type3_date+INTERVAL a.register_time MINUTE),'%Y%m%d%H%i%s') then
+										1
+								else
+										0
+							end) as type3_registertime_cnt
+						]]>
+		      from i_training as a,
+			        i_training_log as b,
+			        (select sa.* , sb.sdate as register_sdate 
+					  	from (select * 
+		  						from i_training_user where  
+	     						training_code in ( 	<foreach collection="list" item="element" separator=" , ">#{element}</foreach>  ) 
+								)as sa 
+						left join  (
+											SELECT  ssa.* FROM 
+											i_training_register as ssa, (SELECT training_code,email,name,min(sdate) as sdate
+																					FROM i_training_register 
+																					where matching_flag in ('C_Y','Y')
+																					GROUP BY email,name,training_code
+																				) as ssb
+											where 
+											ssa.training_code = ssb.training_code
+											and
+											 ssa.email=ssb.email
+											and
+											  ssa.name=ssb.name
+											and
+											 ssa.sdate=ssb.sdate 	
+										 ) as sb
+						on sa.name = sb.name and sa.email = sb.email and sa.training_code= sb.training_code
+						) as c,
+			        i_institution as d
+		      where
+					a.code in ( 
+						<foreach collection="list" item="element" separator=" , ">#{element}</foreach> 
+					 ) 
+				and 
+			        a.code = b.training_code
+		       and
+					b.training_user_code = c.code
+				and
+				   a.institution_code= d.code
+				and 
+				 	b.status = 'end'
+	) as tb
+) as ttb
+    </select>
+    
+     <!-- 한 훈련에 대한 종합 정보 조회 -->
+    <select id="selectTrainingLogChartReportExcel" parameterType="String" resultType="HashMap">
+    	<![CDATA[
+    	select
+    	 training_code
+		  ,institution_name
+		  ,(select group_name from i_group where code = ig_code) as group_name 
+		  ,tname
+		  ,status
+		  , all_total
+		  , total
+		  , start_date
+		  , end_date
+		  , gp_title
+		  , if(training_type1='Y', concat(type1_use,'건(',type1_use_percent,'%)'), '-') as type1_use
+		  , if(training_type2='Y', concat(type2_use,'건(',type2_use_percent,'%)'), '-') as type2_use
+		  , if(training_type3='Y', concat(type3_use,'건(',type3_use_percent,'%)'), '-') as type3_use
+		   ,(case 
+					when register_type ='n' THEN '-'
+					when status ='ready' THEN '-'
+					when register_cnt is null or register_cnt_percent is null THEN '0건(0.00%)'
+					when register_cnt ='' or register_cnt_percent ='' THEN '0건(0.00%)'
+					else 
+						concat(register_cnt,'건(',register_cnt_percent,'%)')
+					END
+			) as register_cnt
+		  ,(case 
+					when training_type1='N' or register_type ='n' THEN '-'
+					when type1_register_cnt is null or type1_register_cnt_percent is null THEN '0건(0.00%)'
+					when type1_register_cnt ='' or type1_register_cnt_percent ='' THEN '0건(0.00%)'
+					else 
+						concat(type1_register_cnt,'건(',type1_register_cnt_percent,'%)')
+					END
+			) as type1_register
+		   ,(case 
+					when training_type2='N' or register_type ='n' THEN '-'
+					when type2_register_cnt is null or type2_register_cnt_percent is null THEN '0건(0.00%)'
+					when type2_register_cnt ='' or type2_register_cnt_percent ='' THEN '0건(0.00%)'
+					else 
+						concat(type2_register_cnt,'건(',type2_register_cnt_percent,'%)')
+					END
+			) as type2_register
+			 ,(case 
+					when training_type3='N' or register_type ='n' THEN '-'
+					when type3_register_cnt is null or type3_register_cnt_percent is null THEN '0건(0.00%)'
+					when type3_register_cnt ='' or type3_register_cnt_percent ='' THEN '0건(0.00%)'
+					else 
+						concat(type3_register_cnt,'건(',type3_register_cnt_percent,'%)')
+					END
+			) as type3_register
+		  ,(case 
+					when training_type1='N' or register_type ='n' or register_time_type ='N' THEN '-'
+					when type1_registertime_cnt is null or type1_registertime_cnt_percent is null THEN '0건(0.00%)'
+					when type1_registertime_cnt ='' or type1_registertime_cnt_percent ='' THEN '0건(0.00%)'
+					else 
+						concat(type1_registertime_cnt,'건(',type1_registertime_cnt_percent,'%)')
+					END
+			) as type1_registertime
+		  ,(case 
+					when training_type2='N' or register_type ='n' or register_time_type ='N' THEN '-'
+					when type2_registertime_cnt is null or type2_registertime_cnt_percent is null THEN '0건(0.00%)'
+					when type2_registertime_cnt ='' or type2_registertime_cnt_percent ='' THEN '0건(0.00%)'
+					else 
+						concat(type2_registertime_cnt,'건(',type2_registertime_cnt_percent,'%)')
+					END
+			) as type2_registertime
+			,(case 
+					when training_type3='N' or register_type ='n' or register_time_type ='N' THEN '-'
+					when type3_registertime_cnt is null or type3_registertime_cnt_percent is null THEN '0건(0.00%)'
+					when type3_registertime_cnt ='' or type3_registertime_cnt_percent ='' THEN '0건(0.00%)'
+					else 
+						concat(type3_registertime_cnt,'건(',type3_registertime_cnt_percent,'%)')
+					END
+			) as type3_registertime
+		  , if(register_type ='y' and register_time_type ='Y' and register_time is not null, concat('신고준수시간 : ',register_time,'분 이내'),'') as register_time
+from(
+	select
+			  training_code
+			  ,institution_name
+			  ,  ig_code		       
+			  , tname
+			  ,status
+			  , count(training_code) as total
+			  , (select count(*) from i_training_user where training_code=tb.training_code) as all_total
+			  , start_date
+			  , end_date
+			  ,register_type
+			  ,register_time_type
+			  ,register_time
+			  ,all_send_type
+			  ,send_percent
+			  ,send_number	
+			  , (case 
+					when type = '0' THEN title
+					when type = '1'  THEN  (select group_concat(gp_title separator '\n') as gp_title from i_training_grp where training_code= tb.training_code) 
+					else title
+					END
+				 ) as gp_title
+			  , (case when sum(training_type1)>0 then 'Y' else 'N' end) as training_type1
+			  , (case when sum(training_type2)>0 then 'Y' else 'N' end) as training_type2
+			  , (case when sum(training_type3)>0 then 'Y' else 'N' end) as training_type3
+			  , sum(training_type1) AS training_type1_cal 
+			  , sum(training_type2) AS training_type2_cal 
+			  , sum(training_type3) AS training_type3_cal 		  
+			  , sum(type1_use) as type1_use
+			  , Round(sum(type1_use) * 100 / sum(training_type1),2) as type1_use_percent
+			  , sum(type2_use) as type2_use
+			  , Round(sum(type2_use) * 100 / sum(training_type2),2) as type2_use_percent
+			  , sum(type3_use) as type3_use
+			  , Round(sum(type3_use) * 100 / sum(training_type3),2) as type3_use_percent
+			  , sum(register_cnt) as register_cnt
+			  , if( Round(sum(register_cnt) * 100 / count(training_code),2) > 100 , '100.00', Round(sum(register_cnt) * 100 / count(training_code),2)) as register_cnt_percent
+			  , sum(type1_register_cnt) as type1_register_cnt
+			  , if( Round(sum(type1_register_cnt) * 100 / sum(type1_use),2) > 100 , '100.00', Round(sum(type1_register_cnt) * 100 / sum(type1_use),2)) as type1_register_cnt_percent
+			  , sum(type2_register_cnt) as type2_register_cnt
+			  , if( Round(sum(type2_register_cnt) * 100 / sum(type2_use),2) > 100 , '100.00', Round(sum(type2_register_cnt) * 100 / sum(type2_use),2)) as type2_register_cnt_percent
+			  , sum(type3_register_cnt) as type3_register_cnt
+			  , if( Round(sum(type3_register_cnt) * 100 / sum(type3_use),2) > 100 , '100.00', Round(sum(type3_register_cnt) * 100 / sum(type3_use),2)) as type3_register_cnt_percent
+			  , sum(type1_registertime_cnt) as type1_registertime_cnt
+			  , if( Round(sum(type1_registertime_cnt) * 100 / sum(type1_use),2) > 100 , '100.00', Round(sum(type1_registertime_cnt) * 100 / sum(type1_use),2)) as type1_registertime_cnt_percent
+			  , sum(type2_registertime_cnt) as type2_registertime_cnt
+			  , if( Round(sum(type2_registertime_cnt) * 100 / sum(type2_use),2) > 100 , '100.00', Round(sum(type2_registertime_cnt) * 100 / sum(type2_use),2)) as type2_registertime_cnt_percent
+	 		  , sum(type3_registertime_cnt) as type3_registertime_cnt
+			  , if( Round(sum(type3_registertime_cnt) * 100 / sum(type3_use),2) > 100 , '100.00', Round(sum(type3_registertime_cnt) * 100 / sum(type3_use),2)) as type3_registertime_cnt_percent
+	from (select
+						b.code,
+				        a.code as training_code,
+				      	a.type,
+				        a.send_email,
+				        a.title,
+				        a.status,
+				        a.register_type,
+				        a.register_time_type,
+				        a.register_time,
+				        a.send_name,
+						  a.all_send_type,
+						  a.send_percent,
+						  a.send_number,	
+						  a.ig_code,		       
+				        d.institution_name,
+				        (
+							case 
+								when a.type = '0' and a.training_type1='Y' then '1'
+								when a.type = '1' AND  (select COUNT(*) from i_training_grp where training_code = a.code and training_type1 = 'Y' and code = c.tg_code )>0 THEN '1'
+								else '0' 
+							END
+						) as training_type1,
+				        (
+							case 
+								when a.type = '0' AND a.training_type2 ='Y' THEN '1'
+								when a.type = '1' AND  (select COUNT(*) from i_training_grp where training_code = a.code and training_type2 = 'Y' and code = c.tg_code )>0 THEN '1'
+								else '0'
+							END
+						) as training_type2,
+				
+				        (
+							case 
+								when a.type = '0' AND a.training_type3 ='Y' THEN '1'
+								when a.type = '1' AND  (select COUNT(*) from i_training_grp where training_code = a.code and training_type3 = 'Y' and code = c.tg_code )>0 THEN '1'
+								else '0'
+							END
+						) as training_type3,
+				        if( a.training_type1='Y', '1', '0') AS training_type1_cal,
+				        if( a.training_type2='Y', '1', '0') AS training_type2_cal,
+				        if( a.training_type3='Y', '1', '0') AS training_type3_cal,
+				        a.start_date,
+				        a.end_date,
+				        a.tname,
+				        (case 
+			        		when b.type1_use='' or b.type1_use IS NULL then '0' 
+					  		when DATE_FORMAT(b.type1_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0' 
+							ELSE '1'
+						 end) AS type1_use,
+				        (case 
+						  		when b.type2_use='' or b.type2_use IS NULL then '0' 
+								when DATE_FORMAT(b.type2_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0' 
+								ELSE '1' 
+						end) AS type2_use,
+				        (case 
+				        		when b.type3_use='' or b.type3_use IS NULL then '0' 
+						  		when DATE_FORMAT(b.type3_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0' 
+								ELSE '1' 
+						end) AS type3_use,
+				       (case 
+			        		when b.type1_use='' or b.type1_use IS NULL then '0'
+							when b.type2_use='' or b.type2_use IS NULL  then '0'   
+					  		when DATE_FORMAT(b.type1_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0'  
+							when DATE_FORMAT(b.type2_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0'  
+							ELSE '1' 
+						end) AS type1_2_use,
+				  	  (case 
+					  	  	when b.type1_use='' or b.type1_use IS NULL then '0' 
+							when b.type3_use='' or b.type3_use IS NULL then '0'
+							when DATE_FORMAT(b.type1_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0' 
+							when DATE_FORMAT(b.type3_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0' 
+							ELSE '1' 
+						end) AS type1_3_use,
+					  (case 
+					  		when b.type2_use='' or b.type2_use IS NULL then '0'
+					  		when b.type3_use='' or b.type3_use IS NULL then '0'
+							when DATE_FORMAT(b.type2_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0'
+							when DATE_FORMAT(b.type3_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0'
+							ELSE '1' 
+						end) AS type2_3_use,
+					  (case 
+					  		when b.type1_use='' or b.type1_use IS NULL then '0'
+					  		when b.type2_use='' or b.type2_use IS NULL then '0'
+					  		when b.type3_use='' or b.type3_use IS NULL then '0' 
+					  		when DATE_FORMAT(b.type1_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0' 
+							when DATE_FORMAT(b.type2_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0'
+							when DATE_FORMAT(b.type3_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then '0'
+							ELSE '1' 
+						end) AS type1_2_3_use,
+						AES_DECRYPT(UNHEX(c.email), (select secret_key from i_configuration where code=1)) as email ,
+						AES_DECRYPT(UNHEX(c.name), (select secret_key from i_configuration where code=1)) as name  ,
+				        c.department_name,
+				        c.unikey,
+				        b.sdate,
+				        b.send_date,
+				       	if( 
+							(	
+								select count(*) 	
+								from i_training_register 
+								where training_code = c.training_code and email = c.email and name=c.name
+								and DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+							) > 0, 1, 0) as register_cnt
+							,
+				       	if( 
+							(	
+								select count(*) 	
+								from i_training_register 
+								where b.type1_use!='' 
+								and DATE_FORMAT(b.type1_date ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+								and training_code = c.training_code and email = c.email and name=c.name 
+								and DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+							) > 0, 1, 0) as type1_register_cnt
+							,
+				       	if( 
+							(	
+								select count(*) 	
+								from i_training_register 
+								where b.type2_use!='' 
+								and DATE_FORMAT(b.type2_date ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+								and training_code = c.training_code and email = c.email and name=c.name 
+								and DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+							) > 0, 1, 0) as type2_register_cnt
+							,
+				       	if( 
+							(	
+								select count(*) 	
+								from i_training_register 
+								where b.type3_use!='' 
+								and DATE_FORMAT(b.type3_date ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+								and training_code = c.training_code and email = c.email and name=c.name 
+								and DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+							) > 0, 1, 0) as type3_register_cnt
+						, (case
+								when b.type1_use is null || a.register_time_type is null then
+					    			0
+								when b.type1_use =''|| a.register_time_type ='N' then 
+									0
+				    			when DATE_FORMAT(b.type1_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then 
+				    				0					    						
+								when DATE_FORMAT(c.register_sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT((b.type1_date+INTERVAL a.register_time MINUTE),'%Y%m%d%H%i%s') then
+										1
+								else
+										0
+							end) as type1_registertime_cnt
+						, (case
+								when b.type2_use is null || a.register_time_type is null then
+					    			0
+								when b.type2_use =''|| a.register_time_type ='N' then
+				    				0
+			    				when DATE_FORMAT(b.type2_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then 
+				    				0		
+								when DATE_FORMAT(c.register_sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT((b.type2_date+INTERVAL a.register_time MINUTE),'%Y%m%d%H%i%s') then
+										1
+								else
+										0
+							end) as type2_registertime_cnt
+						, (case
+								when b.type3_use is null || a.register_time_type is null then
+					    			0
+								when b.type3_use =''|| a.register_time_type ='N' then
+				    				0
+				    			when DATE_FORMAT(b.type3_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then 
+				    				0		
+								when DATE_FORMAT(c.register_sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT((b.type3_date+INTERVAL a.register_time MINUTE),'%Y%m%d%H%i%s') then
+										1
+								else
+										0
+							end) as type3_registertime_cnt
+							]]>
+		      from i_training as a,
+			        i_training_log as b,
+			        (select sa.* , sb.sdate as register_sdate 
+					  	from (select * 
+		  						from i_training_user where  
+	     						training_code in (#{code}) 
+								)as sa 
+						left join  (
+											SELECT  ssa.* FROM 
+											i_training_register as ssa, (SELECT training_code,email,name,min(sdate) as sdate
+																					FROM i_training_register 
+																					where matching_flag in ('C_Y','Y')
+																					GROUP BY email,name,training_code
+																				) as ssb
+											where 
+											ssa.training_code = ssb.training_code
+											and
+											 ssa.email=ssb.email
+											and
+											  ssa.name=ssb.name
+											and
+											 ssa.sdate=ssb.sdate 	
+										 ) as sb
+						on sa.name = sb.name and sa.email = sb.email and sa.training_code= sb.training_code
+						) as c,
+			        i_institution as d
+		      where
+					a.code in (#{code}) 
+				and 
+			        a.code = b.training_code
+		       and
+					b.training_user_code = c.code
+				and
+				   a.institution_code= d.code
+				and 
+				 	b.status = 'end'
+
+	) as tb
+) as ttb
+	
+    </select>
+    
+    <!-- 신고리스트 -->
+ 	<select id="selectTrainingRegisterListExcel" parameterType="String" resultType="HashMap">
+ 	<![CDATA[
+ 	select * from 
+ 	(
+ 		select 
+			 CAST((@ROWNUM := @ROWNUM + 1) as CHAR(50)) as code
+			,training_code
+			, CAST(AES_DECRYPT(UNHEX(a.email), (select secret_key from i_configuration where code=1)) as CHAR(100)) as email
+ 			, CAST(AES_DECRYPT(UNHEX(a.name), (select secret_key from i_configuration where code=1)) as CHAR(100)) as name 
+ 			,title
+			,content
+			,sdate
+			,(case
+	 				when matching_flag = 'C' then	 '관리자 접수'
+	 				when matching_flag = 'C_Y' then	 '관리자 접수(사용자매칭O)'
+	 				when matching_flag = 'C_N' then	 '관리자 접수(사용자매칭X)'
+	 				when matching_flag = 'Y' then	 '사용자 매칭O'
+					else
+						'사용자매칭X'
+				end) as matching_flag  
+			,check_mail_status
+			,tg_code
+			,(case 
+					when (type1_use='' or type1_use IS NULL) then 'X' 
+					ELSE 'O'
+				end) AS type1_use
+			,if(type1_date is not null,type1_date,'') as type1_date
+			,if(register_time is not null,register_time,'') as register_time  
+	 		, (case
+	 				when type1_use is null  || type1_date is null || register_time is null then
+		    				'-'
+		    		when type1_use =''  || type1_date ='' || register_time ='' then
+		    				'-'
+					 when DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT((type1_date+INTERVAL register_time MINUTE),'%Y%m%d%H%i%s') then
+					      '-'
+					when TIME_FORMAT(TIMEDIFF(sdate,(type1_date+INTERVAL register_time MINUTE)),'%H%i') ='0000' then
+						TIME_FORMAT(TIMEDIFF(sdate,(type1_date+INTERVAL register_time MINUTE)),'%s초')
+					when TIME_FORMAT(TIMEDIFF(sdate,(type1_date+INTERVAL register_time MINUTE)),'%H') ='00' then
+						TIME_FORMAT(TIMEDIFF(sdate,(type1_date+INTERVAL register_time MINUTE)),'%i분%s초')
+					else
+						TIME_FORMAT(TIMEDIFF(sdate,(type1_date+INTERVAL register_time MINUTE)),'%H시%i분%s초')
+				end) as register_excess_time  
+			 , (case
+					when type1_use is null  || type1_date is null || register_time is null then
+		    				'-'
+					when type1_use =''  || type1_date ='' || register_time ='' then
+	    				'-'
+					when DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT((type1_date+INTERVAL register_time MINUTE),'%Y%m%d%H%i%s') then
+							'O'
+						else
+							'X'
+				end) as registertime_use
+	from (	select sa1.*
+		 		from i_training_register as sa1, i_training as sb1  
+		 		where training_code = #{training_code}
+				 and sa1.training_code = sb1.code
+				 and  DATE_FORMAT(sa1.sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(sb1.end_date,'%Y%m%d%H%i%s')
+		 	)as a	left join (select (case 
+												when (sa.type1_use='' or sa.type1_use IS NULL) then '' 
+												when DATE_FORMAT(sa.type1_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(sc.end_date,'%Y%m%d%H%i%s') then ''
+		 										ELSE sa.type1_use
+										  end) AS type1_use
+										,(case 
+												when (sa.type1_date='' or sa.type1_date IS NULL) then '' 
+												when DATE_FORMAT(sa.type1_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(sc.end_date,'%Y%m%d%H%i%s') then ''
+		 										ELSE sa.type1_date
+										  end) AS type1_date								
+											,sb.name
+											,sb.email
+											, sc.register_time
+											,sc.end_date
+									 from i_training_log as sa, i_training_user as sb , i_training as sc  
+									 where 
+									 		sa.training_code = #{training_code}
+										 and sa.training_code= sc.code
+										 and sa.status='end' 
+										 and sa.training_user_code=sb.code
+									) as b 
+									on a.name = b.name and a.email =b.email		
+									,(SELECT @ROWNUM := 0) R 	
+									]]>
+		) as tb
+ 	</select>
+ 	
+ 	<!-- 신고리스트(중복 제거) -->
+ 	<select id="selectTrainingRegisterExceptReduplicationExcel" parameterType="String" resultType="HashMap">
+ 	<![CDATA[
+ 	select 
+ 			 CAST((@ROWNUM := @ROWNUM + 1) as CHAR(50)) as code
+ 			,tb.*
+ 	 from 
+ 	(
+ 			select 
+			a.training_code
+			, CAST(AES_DECRYPT(UNHEX(a.email), (select secret_key from i_configuration where code=1)) as CHAR(100)) as email
+ 			, CAST(AES_DECRYPT(UNHEX(a.name), (select secret_key from i_configuration where code=1)) as CHAR(100)) as name 
+ 			,a.title
+			,a.content
+			,a.sdate
+			,(case
+	 				when a.matching_flag = 'C' then	 '관리자 접수'
+	 				when a.matching_flag = 'C_Y' then	 '관리자 접수(사용자매칭O)'
+	 				when a.matching_flag = 'C_N' then	 '관리자 접수(사용자매칭X)'
+	 				when a.matching_flag = 'Y' then	 '사용자 매칭O'
+					else
+						'사용자매칭X'
+				end) as matching_flag  
+			,a.check_mail_status
+			,a.tg_code
+			,(case 
+					when (b.type1_use='' or b.type1_use IS NULL) then 'X' 
+					ELSE 'O'
+				end) AS type1_use
+			,if(b.type1_date is not null,b.type1_date,'') as type1_date
+			,if(b.register_time is not null,b.register_time,'') as register_time  
+	 		, (case
+	 				when b.type1_use is null  || b.type1_date is null || b.register_time is null then
+		    				'-'
+		    		when b.type1_use =''  || b.type1_date ='' || b.register_time ='' then
+		    				'-'
+					 when DATE_FORMAT(a.sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT((b.type1_date+INTERVAL b.register_time MINUTE),'%Y%m%d%H%i%s') then
+					      '-'
+					when TIME_FORMAT(TIMEDIFF(a.sdate,(b.type1_date+INTERVAL b.register_time MINUTE)),'%H%i') ='0000' then
+						TIME_FORMAT(TIMEDIFF(a.sdate,(b.type1_date+INTERVAL b.register_time MINUTE)),'%s초')
+					when TIME_FORMAT(TIMEDIFF(a.sdate,(b.type1_date+INTERVAL b.register_time MINUTE)),'%H') ='00' then
+						TIME_FORMAT(TIMEDIFF(a.sdate,(b.type1_date+INTERVAL b.register_time MINUTE)),'%i분%s초')
+					else
+						TIME_FORMAT(TIMEDIFF(a.sdate,(b.type1_date+INTERVAL b.register_time MINUTE)),'%H시%i분%s초')
+				end) as register_excess_time  
+			 , (case
+					when b.type1_use is null  || b.type1_date is null || b.register_time is null then
+		    				'-'
+					when b.type1_use =''  || b.type1_date ='' || b.register_time ='' then
+	    				'-'
+					when DATE_FORMAT(a.sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT((b.type1_date+INTERVAL b.register_time MINUTE),'%Y%m%d%H%i%s') then
+							'O'
+						else
+							'X'
+				end) as registertime_use
+		
+ 		from ( 
+		 		select a1.*
+			 	from (
+						 	SELECT  sa1.* 
+					 		FROM 	i_training_register as sa1, (SELECT training_code,email,name,min(sdate) as sdate
+																		FROM i_training_register 
+																		where 
+																			training_code = #{training_code}
+																		and
+																			matching_flag in ('C_Y','Y')
+																		GROUP BY email,name,training_code) as sb1
+							where 
+							 sa1.training_code = #{training_code}
+							and 
+							sa1.training_code = sb1.training_code
+							and
+							 sa1.email=sb1.email
+							and
+							  sa1.name=sb1.name
+							and
+							 sa1.sdate=sb1.sdate 
+					) as a1 , i_training as b1
+				where 
+					a1.training_code = b1.code
+				and  
+					DATE_FORMAT(a1.sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(b1.end_date,'%Y%m%d%H%i%s')	
+				 ) as a  , (select 
+										 (case 
+												when (sa2.type1_use='' or sa2.type1_use IS NULL) then '' 
+												when DATE_FORMAT(sa2.type1_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(sc2.end_date,'%Y%m%d%H%i%s') then ''
+		 										ELSE sa2.type1_use
+										  end) AS type1_use
+										,(case 
+												when (sa2.type1_date='' or sa2.type1_date IS NULL) then '' 
+												when DATE_FORMAT(sa2.type1_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(sc2.end_date,'%Y%m%d%H%i%s') then ''
+		 										ELSE sa2.type1_date
+										  end) AS type1_date		
+										,sa2.type1_date_all
+										,sb2.name
+										,sb2.email
+										,sc2.register_time
+								 		,sa2.training_code
+								 from i_training_log as sa2, i_training_user as sb2 ,  i_training as sc2 
+								 where sa2.training_code = #{training_code}
+								 and sa2.training_code= sc2.code
+								 and sa2.training_user_code=sb2.code
+								 and sa2.status='end' 
+								) as b 
+		where
+			 a.training_code = b.training_code	
+		and 
+			a.name = b.name 
+		and 
+			a.email =b.email
+		]]> 			
+		GROUP BY  a.email,a.name
+		order by a.code asc
+	) as tb ,(SELECT @ROWNUM := 0) R 	
+	where 
+	 	1=1
+		
+ 	</select>
+ 	
+ 	<!-- 유저별 -->
+ 	<select id="selectTrainingLogListByTriningCode" parameterType="kr.nshare.statistics.service.StatisticsVO" resultType="kr.nshare.statistics.service.StatisticsVO">
+ 	<![CDATA[
+ 	select *
+		 , (case
+	    		when register_type = 'n'  || register_time_type = 'N'  || type1_date is null || type1_date =''|| register_sdate is null || register_sdate ='' then
+	    				''
+				when DATE_FORMAT(register_sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT((type1_date+INTERVAL register_time MINUTE),'%Y%m%d%H%i%s') then
+				      ''
+				when TIME_FORMAT(TIMEDIFF(register_sdate,(type1_date+INTERVAL register_time MINUTE)),'%H%i') ='0000' then
+					TIME_FORMAT(TIMEDIFF(register_sdate,(type1_date+INTERVAL register_time MINUTE)),'%s초')
+				when TIME_FORMAT(TIMEDIFF(register_sdate,(type1_date+INTERVAL register_time MINUTE)),'%H') ='00' then
+					TIME_FORMAT(TIMEDIFF(register_sdate,(type1_date+INTERVAL register_time MINUTE)),'%i분%s초')
+				else
+					TIME_FORMAT(TIMEDIFF(register_sdate,(type1_date+INTERVAL register_time MINUTE)),'%H시%i분%s초')
+				end) as register_excess_time  
+		 , (case
+	    		when register_time_type ='N' || type1_date is null || type1_date =''|| register_sdate is null || register_sdate ='' then
+	    				'-'
+				when DATE_FORMAT(register_sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT((type1_date+INTERVAL register_time MINUTE),'%Y%m%d%H%i%s') then
+						'O'
+					else
+						'X'
+				end) as registertime_use
+from (
+	 	select 
+	 		(@ROWNUM := @ROWNUM + 1)  as code
+			,b.code as user_code 
+			, a.code as training_code
+			, a.ig_code
+			, a.send_email
+			, a.register_type
+			, a.register_time_type
+			, a.register_time 
+			, send_name
+			, (
+				case 
+					when a.type = '0' and a.training_type1='Y' then 'Y'
+					when a.type = '1' AND  (select COUNT(*) from i_training_grp where training_code = a.code and training_type1 = 'Y' and code = c.tg_code )>0 THEN 'Y'
+					else '' 
+				END
+			) as training_type1
+			,(
+				case 
+					when a.type = '0' AND a.training_type2 ='Y' THEN 'Y'
+					when a.type = '1' AND  (select COUNT(*) from i_training_grp where training_code = a.code and training_type2 = 'Y' and code = c.tg_code )>0 THEN 'Y'
+					else ''
+				END
+			) as training_type2
+			,(
+				case 
+					when a.type = '0' AND a.training_type3 ='Y' THEN 'Y'
+					when a.type = '1' AND  (select COUNT(*) from i_training_grp where training_code = a.code and training_type3 = 'Y' and code = c.tg_code )>0 THEN 'Y'
+					else ''
+				END
+			) as training_type3
+			,
+			(
+				case 
+					when a.type = '0' AND (instr(a.training_type2_content,'#s_custom_form#')>0 and instr(a.training_type2_content,'#s_custom_form#')>0 and instr(a.training_type2_content,'#action_button_script#')>0) then 'Y'
+					when a.type = '1' AND (SELECT  sum(if((instr(aa.training_type2_content,'#s_custom_form#')>0 and instr(aa.training_type2_content,'#s_custom_form#')>0 and instr(aa.training_type2_content,'#action_button_script#')>0),'1','0')) AS PH FROM i_training_grp as aa where aa.training_code = b.training_code and aa.code = c.tg_code )>0 then 'Y'
+					ELSE 'N'
+				END
+			) AS phishing_use
+			, 	(case 
+					when (b.type1_use='' or b.type1_use IS NULL) then 'X' 
+					when DATE_FORMAT(b.type1_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then 'X'
+					ELSE 'O'
+				end) AS type1_use
+			, 	(case 
+					when (b.type2_use='' or b.type2_use IS NULL) then 'X' 
+					when DATE_FORMAT(b.type2_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then 'X'
+					ELSE 'O'
+				end) AS type2_use
+			, 	(case 
+					when (b.type3_use='' or b.type3_use IS NULL) then 'X' 
+					when DATE_FORMAT(b.type3_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then 'X'
+					ELSE 'O'
+				end) AS type3_use
+			, b.type1_date
+			, b.type2_date
+			, b.type3_date
+			, AES_DECRYPT(UNHEX(c.email), (select secret_key from i_configuration where code=1)) as email
+			, AES_DECRYPT(UNHEX(c.name), (select secret_key from i_configuration where code=1)) as name
+			, c.department_name
+			, c.unikey 
+			, c.code as training_user_code
+			, b.sdate
+			 , b.send_date
+			, (select count(*) 
+				from i_training_log_phishing
+				 where training_code = c.training_code and training_user_code = c.code
+				 and DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+				 ) as phishing_cnt
+			, (case 
+					when ((select count(DISTINCT email,name) 
+								from i_training_register 
+								where training_code = c.training_code and email = c.email and name=c.name 
+								and DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+							) > 0) then 'O' 
+					ELSE 'X'
+				end)  as register_use
+			, (
+					select min(sdate) 
+					from i_training_register 
+					where training_code = c.training_code and email = c.email and name=c.name 
+					and DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+					GROUP BY email,name
+				) as register_sdate
+			, (
+					select t_userId 	
+					from i_training_log_phishing 
+					where training_code = c.training_code and training_user_code = c.code 
+					and DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+					order by code desc limit 1
+				) as t_userId
+			, (
+					select t_passwd  	
+					from i_training_log_phishing 
+					where training_code = c.training_code and training_user_code = c.code 
+					and DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+					order by code desc limit 1
+				) as t_passwd
+		from i_training as a, i_training_log as b, i_training_user as c
+		where
+			a.code = b.training_code 
+		and
+			b.training_user_code = c.code
+		and 
+			b.status='end'
+		and
+		]]>
+			a.code = #{training_code} 
+	) as tb ,(SELECT @ROWNUM := 0) R 	
+	where 
+		  1=1
+		 <choose>
+		    <when test="sortcolumn == 'code'">
+		    	 order by code ${orderBy} 
+		    </when>
+		   <when test="sortcolumn == 'name'">
+		    	 order by name ${orderBy} 
+		    </when>
+		    <when test="sortcolumn == 'email'">
+		    	 order by email ${orderBy} 
+		    </when>
+		    <when test="sortcolumn == 'department_name'">
+		    	 order by department_name ${orderBy} 
+		    </when>
+		    <when test="sortcolumn == 'unikey'">
+		    	 order by unikey ${orderBy} 
+		    </when>
+		    <when test="sortcolumn == 'type1_use'">
+		    	 order by type1_use ${orderBy} 
+		    </when>
+		    <when test="sortcolumn == 'type2_use'">
+		    	 order by type2_use ${orderBy} 
+		    </when>
+		    <when test="sortcolumn == 'type3_use'">
+		    	 order by type3_use ${orderBy} 
+		    </when>
+		    <when test="sortcolumn == 'phishing_cnt'">
+		    	 order by phishing_cnt ${orderBy} 
+		    </when>
+		    <when test="sortcolumn == 'register_use'">
+		    	 order by register_use ${orderBy} 
+		    </when>
+		    <when test="sortcolumn == 'registertime_use'">
+		    	 order by registertime_use ${orderBy} 
+		    </when>
+		    <when test="sortcolumn == 'send_date'">
+		    	 order by send_date ${orderBy} 
+		    </when>
+		    <otherwise>
+		     	order by code asc 
+		    </otherwise>
+		 </choose>
+			limit #{startRowNum}, ${pageSize} 
+ 	</select>
+ 	
+ 	<select id="selectTrainingLogListByTriningCodeCnt" parameterType="String" resultType="java.lang.Integer">
+ 	<![CDATA[
+ 	select count(*)
+from (
+	 	select 
+			b.code 
+			, a.code as training_code
+			, a.ig_code
+			, a.send_email
+			, a.register_type
+			, a.register_time_type
+			, a.register_time 
+			, send_name
+			, (
+				case 
+					when a.type = '0' and a.training_type1='Y' then 'Y'
+					when a.type = '1' AND  (select COUNT(*) from i_training_grp where training_code = a.code and training_type1 = 'Y' and code = c.tg_code )>0 THEN 'Y'
+					else '' 
+				END
+			) as training_type1
+			,(
+				case 
+					when a.type = '0' AND a.training_type2 ='Y' THEN 'Y'
+					when a.type = '1' AND  (select COUNT(*) from i_training_grp where training_code = a.code and training_type2 = 'Y' and code = c.tg_code )>0 THEN 'Y'
+					else ''
+				END
+			) as training_type2
+			,(
+				case 
+					when a.type = '0' AND a.training_type3 ='Y' THEN 'Y'
+					when a.type = '1' AND  (select COUNT(*) from i_training_grp where training_code = a.code and training_type3 = 'Y' and code = c.tg_code )>0 THEN 'Y'
+					else ''
+				END
+			) as training_type3
+			,
+			(
+				case 
+					when a.type = '0' AND (instr(a.training_type2_content,'#s_custom_form#')>0 and instr(a.training_type2_content,'#s_custom_form#')>0 and instr(a.training_type2_content,'#action_button_script#')>0) then 'Y'
+					when a.type = '1' AND (SELECT  sum(if((instr(aa.training_type2_content,'#s_custom_form#')>0 and instr(aa.training_type2_content,'#s_custom_form#')>0 and instr(aa.training_type2_content,'#action_button_script#')>0),'1','0')) AS PH FROM i_training_grp as aa where aa.training_code = b.training_code and aa.code = c.tg_code )>0 then 'Y'
+					ELSE 'N'
+				END
+			) AS phishing_use
+			, 	(case 
+					when (b.type1_use='' or b.type1_use IS NULL) then 'X' 
+					when DATE_FORMAT(b.type1_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then 'X'
+					ELSE 'O'
+				end) AS type1_use
+			, 	(case 
+					when (b.type2_use='' or b.type2_use IS NULL) then 'X' 
+					when DATE_FORMAT(b.type2_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then 'X'
+					ELSE 'O'
+				end) AS type2_use
+			, 	(case 
+					when (b.type3_use='' or b.type3_use IS NULL) then 'X' 
+					when DATE_FORMAT(b.type3_date ,'%Y%m%d%H%i%s') > DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s') then 'X'
+					ELSE 'O'
+				end) AS type3_use
+			, b.type1_date
+			, b.type2_date
+			, b.type3_date
+			, AES_DECRYPT(UNHEX(c.email), (select secret_key from i_configuration where code=1)) as email
+			, AES_DECRYPT(UNHEX(c.name), (select secret_key from i_configuration where code=1)) as name
+			, c.department_name
+			, c.unikey 
+			, c.code as training_user_code
+			, b.sdate
+			 , b.send_date
+			, (select count(*) 
+				from i_training_log_phishing
+				 where training_code = c.training_code and training_user_code = c.code
+				 and DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+				 ) as phishing_cnt
+			, (case 
+					when ((select count(DISTINCT email,name) 
+								from i_training_register 
+								where training_code = c.training_code and email = c.email and name=c.name 
+								and DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+							) > 0) then 'O' 
+					ELSE 'X'
+				end)  as register_use
+			, (
+					select min(sdate) 
+					from i_training_register 
+					where training_code = c.training_code and email = c.email and name=c.name 
+					and DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+					GROUP BY email,name
+				) as register_sdate
+			, (
+					select t_userId 	
+					from i_training_log_phishing 
+					where training_code = c.training_code and training_user_code = c.code 
+					and DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+					order by code desc limit 1
+				) as t_userId
+			, (
+					select t_passwd  	
+					from i_training_log_phishing 
+					where training_code = c.training_code and training_user_code = c.code 
+					and DATE_FORMAT(sdate ,'%Y%m%d%H%i%s') <= DATE_FORMAT(a.end_date,'%Y%m%d%H%i%s')
+					order by code desc limit 1
+				) as t_passwd
+		from i_training as a, i_training_log as b, i_training_user as c
+		where
+			a.code = b.training_code 
+		and
+			b.training_user_code = c.code
+		and 
+			b.status='end'
+		and
+		]]>
+			a.code = #{code} 
+	) as tb 		
+ 	</select>
+ 	
+</mapper>

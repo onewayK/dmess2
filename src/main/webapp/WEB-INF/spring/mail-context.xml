@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans" 
+ 	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+ 	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd 
+ 		http://www.springframework.org/schema/integration http://www.springframework.org/schema/integration/spring-integration.xsd 
+ 		http://www.springframework.org/schema/integration/mail http://www.springframework.org/schema/integration/mail/spring-integration-mail.xsd 
+ 		http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd" 
+ 	xmlns:int="http://www.springframework.org/schema/integration" 
+	xmlns:int-mail="http://www.springframework.org/schema/integration/mail" 
+ 	xmlns:util="http://www.springframework.org/schema/util">
+
+	
+	<!-- email 발송 -->
+	<bean id="mailSender" class ="org.springframework.mail.javamail.JavaMailSenderImpl"  >
+	    <property name="host" value="smtp.gmail.com" />
+	    <property name="port" value="465" />
+	    <property name="username" value="igloosec.moncert" />
+	    <property name="password" value="igloosec12#$" />
+	    
+	    <property name="javaMailProperties">
+	    	<props>
+	    		<prop key="mail.smtp.socketFactory.class">javax.net.ssl.SSLSocketFactory</prop>
+                <prop key="mail.transport.protocol">smtps</prop>
+                <prop key="mail.smtp.auth">true</prop>
+                <prop key="mail.smtp.starttls.enable">true</prop>
+                <prop key="mail.debug">true</prop>
+            </props>
+	    </property>
+	</bean>
+	
+	
+	
+	<util:properties id="javaMailProperties">
+		<prop key="mail.pop3.socketFactory.fallback">false</prop>
+		<prop key="mail.debug">true</prop>
+		<prop key="mail.pop3.port">995</prop>
+		<prop key="mail.pop3.socketFactory.class">javax.net.ssl.SSLSocketFactory</prop>
+		<prop key="mail.pop3.socketFactory.port">995</prop>
+	</util:properties>
+	<!-- 메일 수신	 
+	<int:channel id="receiveChannel" />
+	
+	<int-mail:inbound-channel-adapter id="pop3ShouldDeleteTrue"
+	                    store-uri="pop3://kjib_21012:a79431212@pop.daum.net/INBOX"
+			            channel="receiveChannel"
+			            should-delete-messages="true"
+			            auto-startup="true"
+			            java-mail-properties="javaMailProperties"
+			            directory="file:d:/test/" 
+			            >
+			<int:poller fixed-rate="20000"/>
+	</int-mail:inbound-channel-adapter>
+ 	 -->
+		
+</beans>

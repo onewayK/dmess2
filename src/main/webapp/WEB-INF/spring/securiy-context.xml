@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans:beans xmlns="http://www.springframework.org/schema/security"
+	xmlns:beans="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:jee="http://www.springframework.org/schema/jee"
+	xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:security="http://www.springframework.org/schema/security"
+	xsi:schemaLocation="http://www.springframework.org/schema/jee http://www.springframework.org/schema/jee/spring-jee-4.1.xsd
+		http://www.springframework.org/schema/security 	http://www.springframework.org/schema/security/spring-security-4.1.xsd
+		http://www.springframework.org/schema/beans 		http://www.springframework.org/schema/beans/spring-beans-4.1.xsd
+		http://www.springframework.org/schema/context 	http://www.springframework.org/schema/context/spring-context-4.0.xsd">
+	
+		<!-- IoC 기반인 Spring Security의 Annotation 사용하기 위한  package full scan  -->
+		<context:component-scan base-package="kr.nshare"/>
+		<context:annotation-config />
+		
+		<!--   명시된 pattern들에 대해서는  Spring Security 사용 안함 -->
+		<http pattern="/common/license_valid.do" security="none"/> 				
+	  	<http pattern="/member/loginForm.do" security="none"/> 		
+ 	 	<http pattern="/member/actionMain.do" security="none"/> 		 	 	
+        <http pattern="/download/chrome32.do" security="none"/>
+        <http pattern="/download/chrome64.do" security="none"/>
+        <http pattern="/common/**" security="none"/>
+        <http pattern="/css/**" security="none"/>
+        <http pattern="/js/**" security="none"/>
+        <http pattern="/images/**" security="none"/>
+        <http pattern="/img/**" security="none"/>
+        <http pattern="/fonts/**" security="none"/>
+        <http pattern="/font/**" security="none"/>
+        <http pattern="/etc/**" security="none"/>
+        <http pattern="/resources/**" security="none"/>
+        <http pattern="/upload/**" security="none"/>
+        <http pattern="/request/**" security="none"/>			
+		<http pattern="/favicon.ico" security="none"/>
+		<http pattern="/" security="none"/>
+		
+		<!--  Spring Security 옵션 설정 -->	
+	    <security:http auto-config="true">		    
+			<!-- CSRF 방어 해제 (3.2.0 버젼부터 사용 가능) MESS의 Ajax에 대한 에러 제거 -->
+		    <security:csrf disabled="true"/>
+		    <!-- Login Form에 대한 설정 -->
+		     <security:form-login 
+							username-parameter="j_username"
+							password-parameter="j_password"
+							login-page="/member/loginForm.do" 
+							login-processing-url="/member/loginProc.do" 
+							default-target-url="/member/loginProc.do"
+							authentication-failure-url="/member/loginForm.do?type=100"
+							/>		
+			<!-- 로그아웃 설정 (invalidate-session : 세션 소멸)  -->
+			<logout invalidate-session="true" logout-success-url="/member/loginForm.do" logout-url="/member/logOut.do" />
+			<security:session-management> 
+			<!-- 중복 로그인에 대한 설정 -->
+				<security:concurrency-control 
+					max-sessions="1" 
+					expired-url="/member/loginForm.do?type=101" 
+				/> 
+			</security:session-management>
+			<!-- filter 순서에 수정에 대한 설정(기존의 FlterSecurityInterceptor 실행 전에 수정한 filterSecurityInterceptor 소스 사용) --> 	 
+		  <security:custom-filter before="FILTER_SECURITY_INTERCEPTOR" ref="filterSecurityInterceptor"/> 	 	
+		</security:http>		
+	 
+		 <!--  비밀번호 인증에 대한 AuthenticationManager 객체 생성 -->		 
+	 	<authentication-manager alias="authenticationManager">
+			<authentication-provider ref="customAuthenticationProvider" />
+		</authentication-manager>	 	
+	 	
+	 	<!-- 비밀번호 인증-->
+	 	<beans:bean id="customAuthenticationProvider" class="kr.nshare.common.service.security.CustomAuthenticationProvider"/>
+	 	 	
+	 	<!-- FilterSecurityInterceptor에 필요한 객체 생성  -->
+	 	<!--   동적   URL  --><beans:bean id="MetadataSource" class="kr.nshare.common.service.security.CustomFilterSecurityMetadataSource"/>   
+	    <!--   접근   판단  --><beans:bean id="CustomAccessDecisionManager" class="kr.nshare.common.service.security.CustomAccessDecisionManager"/>   
+			
+		<!--FilterSecurityInterceptor에 대한 객체 생성 -->
+		<beans:bean id="filterSecurityInterceptor" class="org.springframework.security.web.access.intercept.FilterSecurityInterceptor">
+			<beans:property name="securityMetadataSource" 	ref="MetadataSource"/>	
+			<beans:property name="accessDecisionManager" 	ref="CustomAccessDecisionManager"/>
+		</beans:bean>	
+	  
+</beans:beans>

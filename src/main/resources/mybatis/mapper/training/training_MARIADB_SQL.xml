@@ -1,0 +1,1506 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+     PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+     "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+ 	
+    <mapper namespace="kr.nshare.training.service.mapper.TrainingMapper">
+ 	
+ 	<!-- 사용자 등록 -->
+ 	<insert id="insertTraining" 
+ 			parameterType="kr.nshare.training.service.TrainingVO" 
+ 			useGeneratedKeys="true" 
+ 			keyProperty="code">
+ 	
+ 		<![CDATA[
+	 		insert into i_training
+				(
+					uc, 
+					service_type,
+					service_setting_code,
+					tname, 
+					title, 
+					send_name, 
+					send_email, 
+					send_content, 
+					training_type1, 
+					training_type2, 
+					training_type2_content, 
+					training_type3, 
+					training_type3_file_type, 
+					training_type3_file_exe_type,
+					training_type3_file_name,
+					training_type3_file_redirect,
+					training_type3_content, 
+					training_type3_exe_content,
+					start_date, 
+					end_date, 
+					sdate, 
+					udate, 
+					request_url, 
+					institution_code, 
+					status,
+					del_type,
+					register_type,
+					register_url,
+					reservation_type,
+					reservation_date,
+					spam_type,
+					spam_time,
+					spam_number,
+					all_send_type,
+					send_number,
+					send_percent,
+					register_time_type,
+					register_time,
+					ig_code,
+					create_id
+					
+				)
+				values
+				(
+					#{uc}
+					,#{service_type}
+					,#{service_setting_code}
+					,#{tname} 
+					,#{title} 
+					,#{send_name} 
+					,#{send_email}
+					,#{send_content} 
+					,#{training_type1} 
+					,#{training_type2} 
+					,#{training_type2_content} 
+					,#{training_type3}
+					,#{training_type3_file_type}
+					,#{training_type3_file_exe_type}  
+					,#{training_type3_file_name}
+					,#{training_type3_file_redirect}
+					,#{training_type3_content}
+					,#{training_type3_exe_content}
+					,#{start_date}
+					,#{end_date}
+					,now()
+					,now() 
+					,#{request_url} 
+					,#{institution_code} 
+					,#{status}
+					,#{del_type}
+					,#{register_type}
+					,#{register_url}
+					,#{reservation_type}
+					,#{reservation_date}
+					,#{spam_type}
+					,#{spam_time}
+					,#{spam_number}
+					,#{all_send_type}
+					,#{send_number}
+					,#{send_percent}
+					,#{register_time_type}
+					,#{register_time}					
+					,#{ig_code}
+					,#{create_id}
+				);
+ 			]]>
+ 	</insert>
+ 	
+ 	
+ 	<!-- 훈련 사용자 등록 -->
+    <insert id="insertTrainingUser" parameterType="java.util.List">
+    	<![CDATA[
+    	insert into i_training_user (email, training_code, name, department_name, unikey, sdate, udate) values
+    	]]>
+        <foreach collection="list" item="element" separator=" , ">
+            (
+	            HEX(AES_ENCRYPT(#{element.email} , (select secret_key from i_configuration where code=1)))
+	            , #{element.training_code}
+	            ,   HEX(AES_ENCRYPT(#{element.name} , (select secret_key from i_configuration where code=1))) 
+	            , #{element.department_name}
+	            , #{element.unikey}
+	            , now()
+	            , now()
+	        )
+        </foreach>
+    </insert>
+    
+    <!-- 훈련 사용자 삭제 루틴 -->
+    <delete id="deleteTrainingUserByCode" parameterType="String">
+    	delete from i_training_user
+    	where 
+    		training_code = #{training_code}
+    </delete>
+    
+    <!-- 훈련 사용자 훈련 코드로 검색 -->
+    <select id="selectTrainingUserByCode" parameterType="String" resultType="kr.nshare.training.service.TrainingVO">
+    	select 
+		   	code
+			,AES_DECRYPT(UNHEX(email), (select secret_key from i_configuration where code=1)) as email
+			,training_code
+			,AES_DECRYPT(UNHEX(name), (select secret_key from i_configuration where code=1)) as name
+			,department_name
+			,unikey
+			,sdate
+			,udate
+			,tg_code
+		 from i_training_user 
+    	where 
+    		training_code = #{training_code}
+    	order by code asc 
+    </select> 
+    
+    <!-- 발송 상태를 포함한 훈련 사용자 훈련 코드로 검색 -->
+    <select id="selectTrainingUserStatusByCode" parameterType="String" resultType="kr.nshare.training.service.TrainingVO">
+    	select 	
+   				a.code
+				,AES_DECRYPT(UNHEX(a.email), (select secret_key from i_configuration where code=1)) as email
+				,a.training_code
+				,AES_DECRYPT(UNHEX(a.name), (select secret_key from i_configuration where code=1)) as name
+				,a.department_name
+				,a.unikey
+				,a.sdate
+				,a.udate
+				,a.tg_code
+				,b.status 
+		from i_training_user as a, i_training_log as b
+    	where 
+    		a.code = b.training_user_code
+		and   		
+    		a.training_code = #{training_code}
+    	order by a.code asc 
+    </select> 
+     
+    <!-- 트레이닝 코드 업데이트 -->
+    <update id="updateTraining" parameterType="kr.nshare.training.service.TrainingVO">
+     update i_training set 
+			tname                           			= #{tname}      
+			,service_setting_code              = #{service_setting_code}                          
+			,title                              		= #{title}                    
+			,send_name                     		= #{send_name}                
+			,send_email                     		= #{send_email}               
+			,send_content                      	= #{send_content}             
+			,training_type1                      	= #{training_type1}           
+			,training_type2                      	= #{training_type2}           
+			,training_type2_content            = #{training_type2_content}   
+			,training_type3                      	= #{training_type3}           
+			,training_type3_file_type           = #{training_type3_file_type}
+			,training_type3_file_exe_type		= #{training_type3_file_exe_type}
+			,training_type3_file_name			= #{training_type3_file_name}
+			,training_type3_file_redirect		= #{training_type3_file_redirect} 
+			,training_type3_content            = #{training_type3_content}   
+			,training_type3_exe_content      = #{training_type3_exe_content}   
+			,start_date                          	= #{start_date}               
+			,end_date                            	= #{end_date}                 
+			,udate                               		= now() 
+			,reservation_type						=#{reservation_type}
+			,reservation_date						=#{reservation_date}
+			,spam_type								=#{spam_type}
+			,spam_time								=#{spam_time}
+			,spam_number							=#{spam_number}
+			,all_send_type							=#{all_send_type}
+			,send_number							=#{send_number}  
+			,send_percent							=#{send_percent}
+			,register_time_type					=#{register_time_type}  
+			,register_time							=#{register_time}          
+			,del_type								= #{del_type}
+			,register_type							= #{register_type}                
+	where code = #{code}
+    </update>
+    
+    <!-- 사용자 총값 검색 -->
+    <select id="selectTrainingListCnt" parameterType="kr.nshare.training.service.TrainingVO" resultType="java.lang.Integer">
+		select count(*) from i_training as a, i_institution as b
+		where
+			a.institution_code = b.code
+    	
+    	<if test="lev!= 'admin'">		
+		and
+			a.institution_code in (
+				select b.code from i_member as a, i_institution as b, i_auth_mapping as c
+				where
+					a.code = c.member_code
+				and
+					b.code = c.institution_code
+				and
+					a.userid = #{userid}
+			)
+		</if>		    
+    	<if test="searchInstitution != ''">	
+			and  institution_code = #{searchInstitution}
+		</if>
+		<if test="searchKeyword!=null and searchKeyword != ''">
+    		
+			<if test="searchCondition=='tname'">	
+				and  tname like concat('%',#{searchKeyword},'%')
+			</if>
+			<if test="searchCondition=='send_name'">	
+				and 
+				(
+					case 
+						when a.type = "0" and a.send_name like concat(#{searchKeyword},'%') then '1'
+						when a.type = "1" and (select count(*) from i_training_grp where training_code = a.code and gp_send_name like concat(#{searchKeyword},'%'))>0 then '1'
+						else '0'
+					end 
+				)> 0
+			</if>
+		</if>
+    </select>
+    
+    <!-- 사용자 리스트 검색 -->
+    <select id="selectTrainingList" parameterType="kr.nshare.training.service.TrainingVO" resultType="kr.nshare.training.service.TrainingVO">
+    <![CDATA[
+    	select
+    		a.code 
+    		, a.service_type
+			, a.uc 
+			, replace(replace(tname,"'",""),"'","") as tname 
+			, a.title 
+			, a.send_name 
+			, a.send_email 
+			, a.send_content 
+			, a.training_type1 
+			, a.training_type2 
+			, a.training_type2_content 
+			, a.training_type2_linkname 
+			, a.training_type3 
+			, a.training_type3_file_type
+			,a.training_type3_file_exe_type 
+			, a.training_type3_file_name 
+			, a.training_type3_file_redirect 
+			, a.training_type3_content 
+			,a.training_type3_exe_content
+			, a.start_date 
+			, a.end_date 
+			, a.sdate 
+			, a.udate 
+			, a.request_url 
+			, a.institution_code 
+			, a.ig_code 
+			, a.status 
+			, a.progress 
+			, a.del_type 
+			, a.register_type 
+			, a.register_url
+			, a.reservation_type
+			, a.reservation_date
+			, a.spam_type
+			, a.spam_time
+			, a.spam_number
+			, a.all_send_type
+			, a.send_number 
+			, a.send_percent
+			,a.register_time_type
+			,a.register_time
+			, a.del_flag
+			, a.type
+    		, b.institution_name
+    		, (select group_name from i_group where code = a.ig_code) as group_name
+    		, (select count(*) from i_training_user where training_code = a.code) as user_cnt 
+    		, (case
+				when a.status = 'step1' then
+					'fail'
+				when DATE_FORMAT(a.start_date ,'%Y%m%d%H%i')<=DATE_FORMAT(now(),'%Y%m%d%H%i') and DATE_FORMAT(now(),'%Y%m%d%H%i')<=DATE_FORMAT(a.end_date ,'%Y%m%d%H%i') then
+					'success'
+				else
+					'fail'
+			end) as validation
+    		from i_training as a, i_institution as b
+		where
+		a.institution_code = b.code
+    ]]>		
+    	<if test="lev!= 'admin'">
+		and 
+			institution_code in (
+				select b.code from i_member as a, i_institution as b, i_auth_mapping as c
+				where
+					a.code = c.member_code
+				and
+					b.code = c.institution_code
+				and
+					a.userid = #{userid}
+			)		   
+		</if>
+    	<if test="searchInstitution != ''">
+		and  institution_code = #{searchInstitution}
+		</if> 
+    	<if test="searchKeyword!=null and searchKeyword != ''">
+    		    		
+			<if test="searchCondition=='tname'">	
+			and  tname like concat('%',#{searchKeyword},'%')
+			</if>
+			<if test="searchCondition=='send_name'">	
+				and 
+				(
+					case 
+						when a.type = "0" and a.send_name like concat(#{searchKeyword},'%') then '1'
+						when a.type = "1" and (select count(*) from i_training_grp where training_code = a.code and gp_send_name like concat(#{searchKeyword},'%'))>0 then '1'
+						else '0'
+					end 
+				)> 0
+			</if>
+		</if>
+    	order by code desc limit #{startRowNum}, ${pageSize}
+    </select>
+ 
+ 
+ 	
+ 	<!-- 사용자 총값 검색 -->
+    <select id="selectTraining2ListCnt" parameterType="kr.nshare.training.service.TrainingVO" resultType="java.lang.Integer">
+		select count(*) from i_training as a, i_institution as b
+		where
+		a.institution_code = b.code
+		<if test="lev!= 'admin'">		
+		and
+			a.institution_code in (
+				select b.code from i_member as a, i_institution as b, i_auth_mapping as c
+				where
+					a.code = c.member_code
+				and
+					b.code = c.institution_code
+				and
+					a.userid = #{userid}
+			)
+		
+		</if>		    
+    	<if test="searchInstitution != ''">	
+			and  institution_code = #{searchInstitution}
+		</if>
+		<if test="searchKeyword!=null and searchKeyword != ''">
+    		
+			<if test="searchCondition=='tname'">	
+				and  tname like concat(#{searchKeyword},'%')
+			</if>
+			<if test="searchCondition=='send_name'">	
+				and  send_name like concat(#{searchKeyword},'%')
+			</if>
+		</if>
+    </select>
+    
+    <!-- 사용자 리스트 검색 -->
+    <select id="selectTraining2List" parameterType="kr.nshare.training.service.TrainingVO" resultType="kr.nshare.training.service.TrainingVO">
+    <![CDATA[
+    	select
+    		a.code 
+			, a.uc 
+			, replace(replace(tname,"'",""),"'","") as tname 
+			, a.title 
+			, a.send_name 
+			, a.send_email 
+			, a.send_content 
+			, a.training_type1 
+			, a.training_type2 
+			, a.training_type2_content 
+			, a.training_type2_linkname 
+			, a.training_type3 
+			, a.training_type3_file_type 
+			, a.training_type3_file_exe_type
+			, a.training_type3_file_name 
+			, a.training_type3_file_redirect 
+			, a.training_type3_content 
+			, a.training_type3_exe_content 
+			, a.start_date 
+			, a.end_date 
+			, a.sdate 
+			, a.udate 
+			, a.request_url 
+			, a.institution_code 
+			, a.ig_code 
+			, a.status 
+			, a.progress 
+			, a.del_type 
+			, a.register_type 
+			, a.register_url
+			, a.reservation_type
+			, a.reservation_date
+			, a.spam_type
+			, a.spam_time
+			, a.spam_number
+			, a.all_send_type
+			, a.send_number  
+			, a.send_percent
+			,a.register_time_type
+			,a.register_time
+			, a.del_flag
+    		, b.institution_name
+    		, (select group_name from i_group where code = a.ig_code) as group_name
+    		, (select count(*) from i_training_user where training_code = a.code) as user_cnt 
+    		, (case
+    		when a.start_date is null || a.start_date ='' || a.end_date is null || a.end_date ='' then
+    				'fail'
+			when DATE_FORMAT(a.start_date ,'%Y%m%d%H%i')<=DATE_FORMAT(now(),'%Y%m%d%H%i') and DATE_FORMAT(now(),'%Y%m%d%H%i')<=DATE_FORMAT(a.end_date ,'%Y%m%d%H%i') then
+					'success'
+				else
+					'fail'
+			end) as validation
+    		from i_training as a, i_institution as b
+		where
+		a.institution_code = b.code
+		and
+		a.type='1'
+    ]]>		
+    	<if test="lev!= 'admin'">
+		and 
+			institution_code in (
+				select b.code from i_member as a, i_institution as b, i_auth_mapping as c
+				where
+					a.code = c.member_code
+				and
+					b.code = c.institution_code
+				and
+					a.userid = #{userid}
+			)		   
+		</if>
+    	<if test="searchInstitution != ''">
+		and  institution_code = #{searchInstitution}
+		</if> 
+    	<if test="searchKeyword!=null and searchKeyword != ''">
+    		    		
+			<if test="searchCondition=='tname'">	
+				and  tname like concat(#{searchKeyword},'%')
+			</if>
+			<if test="searchCondition=='send_name'">	
+				and  send_name like concat(#{searchKeyword},'%')
+			</if>
+		</if>
+    	order by code desc limit #{startRowNum}, ${pageSize}
+    </select>
+ 
+ 	
+ 	<!--  사용자 검색 by code -->
+ 	<select id="selectTrainingByCode" parameterType="String" resultType="kr.nshare.training.service.TrainingVO">
+ 			select a.*
+ 					, (select group_name from i_group where code = a.ig_code) as group_name  
+ 					, (select approval_type from i_training_approval where training_code = a.code) as approval_type
+ 			from i_training as a 
+ 				where 
+ 					1=1 
+ 				and 
+ 					code = #{code} 
+ 				limit 1
+ 	</select>
+ 	
+ 	<!--  훈련 검색  by code -->
+ 	<select id="selectTrainingWithValidByCode" parameterType="String" resultType="kr.nshare.training.service.TrainingVO">
+ 		<![CDATA[
+ 			select a.*
+ 				, (case
+ 				when a.status = 'step1' || a.status = 'ready' then
+					'fail'
+				when a.start_date is null || a.start_date ='' || a.end_date is null || a.end_date ='' then
+					'fail'
+				when DATE_FORMAT(a.start_date ,'%Y%m%d%H%i')<=DATE_FORMAT(now(),'%Y%m%d%H%i') and DATE_FORMAT(now(),'%Y%m%d%H%i')<=DATE_FORMAT(a.end_date ,'%Y%m%d%H%i') then
+					'success'
+				else
+					'fail'
+			end) as validation
+ 			from i_training as a 
+ 				where 
+ 					1=1 
+ 				and 
+ 					code = #{code} 
+ 				limit 1
+ 				]]>
+ 	</select>
+ 	
+ 	
+ 	<!-- 사용자 소유의 기관리스트 -->
+ 	<select id="selectMemberInstitutionList" parameterType="kr.nshare.training.service.TrainingVO" resultType="kr.nshare.training.service.TrainingVO"> 
+	 	<if test="lev=='admin'">
+	 		select 
+	 			c.code
+	 			, c.institution_name
+	 		from i_institution as c
+	 		where 
+	 			1=1
+	 		and
+	 			c.useyn = '0'
+	 		
+	 	</if>
+	 	<if test="lev!='admin'">
+	 	 	select 
+				c.code
+				, c.institution_name
+				, a.userid 
+			from i_member as a, i_auth_mapping as b, i_institution as c
+			where
+				a.code = b.member_code
+			and
+				b.institution_code = c.code
+			and
+				a.userid = #{userid}
+			and
+				c.useyn = '0'
+			and
+				a.useyn = '0'
+		</if>
+ 	</select>
+ 	
+ 	<!-- 훈련 실행 상태값 ajax 호출용 -->
+    <select id="selectAjaxExcuteTrainingStatusList" parameterType="java.util.List" resultType="kr.nshare.training.service.TrainingVO">
+    	select 
+    		code 
+			,`status`
+			, reservation_date 
+			,concat(
+				(select count(*) from i_training_log  where training_code = a.code and (status = 'ready' or status = 'end'))
+		 		,"/"
+		 		,(select count(*) from i_training_log  where training_code = a.code and status = 'end')
+		 	) as progress
+    	from i_training as a
+    		where 
+    			status in ('send','receive','sending','end','stop','stopping','resend','reservation')
+    		and
+    			a.code in
+    			( 
+	    		 <foreach collection="list" item="element" separator=" , ">#{element.code}</foreach>
+        		)
+    </select>
+
+    <select id="selectTrainingLog" parameterType="kr.nshare.training.service.TrainingLogVO" resultType="kr.nshare.training.service.TrainingLogVO">
+    	select 
+			 code
+			,training_code
+			,training_user_code
+			,institution_code
+			,type1_use
+			,type1_date
+			,type1_info
+			,type1_referer
+			,type1_date_all
+			,AES_DECRYPT(UNHEX(type1_ip), (select secret_key from i_configuration where code=1)) as type1_ip
+			,type2_use
+			,type2_date
+			,type2_info
+			,type2_referer
+			,AES_DECRYPT(UNHEX(type2_ip), (select secret_key from i_configuration where code=1)) as type2_ip
+			,type2_date_all
+			,type3_use
+			,type3_date
+			,type3_info
+			,type3_referer
+			,AES_DECRYPT(UNHEX(type3_ip), (select secret_key from i_configuration where code=1)) as type3_ip
+			,type3_date_all
+			,sdate
+			,status
+			,log
+    	from i_training_log 
+    	where
+    		training_code = #{training_code}
+    	and 
+    		training_user_code = #{training_user_code} 
+		order by code desc limit 1
+    </select>
+ 	
+ 	<update id="updateTrainingLog" parameterType="kr.nshare.training.service.TrainingLogVO">
+ 		update i_training_log set 
+ 		<if test="type=='type1'">
+ 			type1_use 			= #{type1_use}
+ 			, type1_date 		= #{type1_date}
+ 			, type1_info 		= #{type1_info}
+ 			, type1_referer	= #{type1_referer}
+ 			, type1_ip			= HEX(AES_ENCRYPT(#{type1_ip} , (select secret_key from i_configuration where code=1)))  
+ 			, type1_date_all	= #{type1_date_all}
+ 		</if>
+ 		<if test="type=='type2'">
+ 			type2_use 			= #{type2_use}
+ 			, type2_date 		= #{type2_date}
+ 			, type2_info 		= #{type2_info}
+ 			, type2_referer	= #{type2_referer}
+ 			, type2_ip			= 	HEX(AES_ENCRYPT(#{type2_ip} , (select secret_key from i_configuration where code=1)))
+ 			, type2_date_all	= #{type2_date_all}
+ 		</if>
+ 		<if test="type=='type3'">
+ 			type3_use 			= #{type3_use}
+ 			, type3_date 		= #{type3_date}
+ 			, type3_info 		= #{type3_info}
+ 			, type3_referer	= #{type3_referer}
+ 			, type3_ip			= HEX(AES_ENCRYPT(#{type3_ip} , (select secret_key from i_configuration where code=1)))
+ 			, type3_date_all	= #{type3_date_all}
+ 		</if>
+ 		where 
+ 			1=1
+ 		and
+ 			training_code = #{training_code}
+ 		and
+ 			training_user_code = #{training_user_code}
+ 			
+ 	</update>
+ 	<!-- select -->
+ 	<select id = "selectTrainingLogSummy" parameterType="String" resultType="kr.nshare.training.service.TrainingVO">
+ 		select  
+ 			concat(
+ 			(select count(*) from i_training_log  where training_code = #{training_code} and (status = 'end' or status = 'ready'))
+ 			,"/"
+ 			,
+ 			(select count(*) from i_training_log  where training_code = #{training_code} and status = 'end')
+ 			) as progress  
+ 		from dual 
+ 	</select>
+ 	<select id = "selectTrainingUserByNameAndEmail" parameterType="kr.nshare.training.service.TrainingVO" resultType="kr.nshare.training.service.TrainingVO">
+ 		select 
+ 			a.code
+			,AES_DECRYPT(UNHEX(a.email), (select secret_key from i_configuration where code=1)) as email
+			,a.training_code
+			,AES_DECRYPT(UNHEX(a.name), (select secret_key from i_configuration where code=1)) as name
+			,a.department_name
+			,a.unikey
+			,a.sdate
+			,a.udate
+			,a.tg_code
+ 			, b.status 
+ 		from i_training_user as a , i_training_log as b
+		where 
+			 a.code=b.training_user_code
+		 and
+			a.training_code =  #{training_code}
+		and
+			AES_DECRYPT(UNHEX(a.name), (select secret_key from i_configuration where code=1)) = #{name}
+		and
+			AES_DECRYPT(UNHEX(a.email), (select secret_key from i_configuration where code=1)) =#{email}
+		and 
+			b.status ='end' 		
+ 	</select>
+ 	
+ 	<insert id="insertTrainingLogPhishing" parameterType="kr.nshare.request.service.RequestVO">
+ 		insert into i_training_log_phishing
+ 		(
+ 			training_code
+ 			, training_user_code
+ 			, t_userId
+ 			, t_passwd
+ 			, t_01
+ 			, t_02
+ 			, t_03
+ 			, t_04	
+ 			, sdate
+ 		)
+ 		values
+ 		(
+ 			#{training_code}
+ 			, #{training_user_code}
+ 			, #{t_userId}
+ 			, #{t_passwd}
+ 			, #{t_01}
+ 			, #{t_02}
+ 			, #{t_03}
+ 			, #{t_04}
+ 			, now()
+ 		)
+ 	</insert>
+ 	
+ 	<insert id="insertTrainingRegister" parameterType="kr.nshare.training.service.TrainingRegisterVO">
+ 		insert into i_training_register 
+ 		(
+ 			training_code
+ 			, email
+ 			, name
+ 			, title
+ 			, content
+ 			, sdate
+ 			, matching_flag
+ 			,check_mail_status
+ 		)
+ 		values
+ 		(
+ 			#{training_code}
+ 			, HEX(AES_ENCRYPT(#{email} , (select secret_key from i_configuration where code=1))) 
+ 			, HEX(AES_ENCRYPT(#{name} , (select secret_key from i_configuration where code=1))) 
+ 			, #{title}
+ 			, #{content}
+ 			, now()
+ 			, #{matching_flag}
+ 			,#{check_mail_status}
+ 		)
+ 	</insert>
+	
+	<insert id="insertTrainingRegister2" parameterType="kr.nshare.training.service.TrainingRegisterVO">
+ 		insert into i_training_register 
+ 		(
+ 			training_code
+ 			, email
+ 			, name
+ 			, title
+ 			, content
+ 			, sdate
+ 			, matching_flag
+ 			,check_mail_status
+ 		)
+ 		values
+ 		(
+ 			#{training_code}
+ 			, HEX(AES_ENCRYPT(#{email} , (select secret_key from i_configuration where code=1))) 
+ 			, HEX(AES_ENCRYPT(#{name} , (select secret_key from i_configuration where code=1))) 
+ 			, #{title}
+ 			, #{content}
+ 			, #{sdate}
+ 			, #{matching_flag}
+ 			, #{check_mail_status}
+ 		)
+ 	</insert>
+	
+	<select id="selectTrainingGroupListCnt" parameterType="kr.nshare.training.service.TrainingVO" resultType="java.lang.Integer">
+		select count(*) from i_group as a, i_institution as b
+		where
+			a.institution_code  = b.code
+ 
+		<if test="lev!= 'admin'">
+		and 
+			a.institution_code in (
+				select b.code from i_member as a, i_institution as b, i_auth_mapping as c
+				where
+					a.code = c.member_code
+				and
+					b.code = c.institution_code
+				and
+					a.userid = #{userid}
+			)		   
+		</if>
+		<if test="searchInstitution != ''">	
+			and  a.institution_code = #{searchInstitution}
+		</if>
+		<if test="searchKeyword!=null and searchKeyword != ''">
+    		<if test="searchCondition=='gname'">	
+				and  a.group_name like concat(#{searchKeyword},'%')
+			</if>
+			<if test="searchCondition=='institution_name'">	
+				and  b.institution_name like concat(#{searchKeyword},'%')
+			</if>
+		</if>
+	</select> 	
+	<select id="selectTrainingGroupList" parameterType="kr.nshare.training.service.TrainingVO" resultType="kr.nshare.training.service.TrainingVO">
+		select
+			a.*
+			, b.institution_name 
+			, (select count(*) from i_training where ig_code = a.code and institution_code = a.institution_code) as training_cnt 
+			, (select group_concat(tname) from i_training where ig_code = a.code and institution_code = a.institution_code) as training_list 	
+			from i_group as a, i_institution as b
+		where
+			a.institution_code  = b.code
+		<if test="lev!= 'admin'">
+		and 
+			a.institution_code in (
+				select b.code from i_member as a, i_institution as b, i_auth_mapping as c
+				where
+					a.code = c.member_code
+				and
+					b.code = c.institution_code
+				and
+					a.userid = #{userid}
+			)		   
+		</if>
+		<if test="searchInstitution != ''">	
+			and  a.institution_code = #{searchInstitution}
+		</if>
+		<if test="searchKeyword!=null and searchKeyword != ''">
+    		<if test="searchCondition=='gname'">	
+				and  a.group_name like concat(#{searchKeyword},'%')
+			</if>
+			<if test="searchCondition=='institution_name'">	
+				and  b.institution_name like concat(#{searchKeyword},'%')
+			</if>
+		</if>
+    	order by a.code desc limit #{startRowNum}, ${pageSize}
+	</select>
+ 	
+ 	<!-- 사용자 등록 -->
+ 	<insert id="insertGroup" 
+ 			parameterType="kr.nshare.training.service.TrainingVO" 
+ 			useGeneratedKeys="true" 
+ 			keyProperty="code">
+ 	
+ 		<![CDATA[
+	 			insert into i_group
+				(
+					group_name
+					, institution_code
+					, sdate
+					, create_user
+				)
+				values
+				(
+					#{group_name}
+					, #{institution_code}
+					, now()
+					, #{create_user}
+				);
+ 			]]>
+ 	</insert>
+ 	
+ 	<update id="updateGroup" parameterType="kr.nshare.training.service.TrainingVO">
+     	update i_group set 
+			group_name = #{group_name}
+		where code = #{code}
+    </update>
+ 	
+ 	
+ 	<!-- 훈련 그룹 검색 -->
+    <select id="selectGroupByCode" parameterType="String" resultType="kr.nshare.training.service.TrainingVO">
+    	select * from i_group 
+    	where 
+    		code = #{code} 
+    </select>
+    
+    <!-- 기관 코드로 훈련 그룹 검색 -->
+    <select id="selectGroupByInstitutionCode" parameterType="String" resultType="kr.nshare.training.service.TrainingVO">
+    	select * from i_group 
+    	where 
+    		institution_code = #{code} 
+    </select>
+        
+ 	<!-- 그룹코드로 훈련 검색 -->
+    <select id="selectTrainingByGroupCode" parameterType="String" resultType="kr.nshare.training.service.TrainingVO">
+    	select * from i_training 
+    	where 
+    		ig_code = #{code} 
+    </select>
+    
+ 	<!-- 기관코드로 group정보 검색 -->
+ 	<select id="selectGroupListByInstitutionCode" parameterType="String" resultType="kr.nshare.training.service.TrainingVO">
+		select * 
+		from i_group 
+		where 
+				institution_code = #{code} 
+		order by sdate desc 
+ 	</select>
+ 	
+ 	<insert id="insertCopyTrainingByCode" parameterType="kr.nshare.training.service.TrainingVO" 
+ 														useGeneratedKeys="true" 
+ 														keyProperty="code">
+ 			<![CDATA[
+				insert into i_training(
+					uc, 
+					tname, 
+					service_type,
+					service_setting_code,
+					title, 
+					send_name, 
+					send_email, 
+					send_content, 
+					training_type1, 
+					training_type2, 
+					training_type2_content, 
+					training_type3, 
+					training_type3_file_type,
+					training_type3_file_exe_type, 
+					training_type3_file_name,
+					training_type3_file_redirect,
+					training_type3_content,
+					training_type3_exe_content, 
+					start_date, 
+					end_date, 
+					sdate, 
+					udate, 
+					request_url, 
+					institution_code, 
+					status,
+					del_type,
+					register_type,
+					register_url,
+					reservation_type,
+					reservation_date,
+					spam_type,
+					spam_time,
+					spam_number,
+					all_send_type,
+					send_number,
+					send_percent,
+					register_time_type,
+					register_time,
+					ig_code,
+					create_id,
+					type
+				) (select  
+				a.uc
+				,concat(a.tname ,"_copy")
+				,a.service_type
+				,(select 
+						sa.code 
+					from i_training_service as sa, i_member as sb 
+					where 
+						sa.uc = sb.code 
+					and  
+						sa.service_use = 'Y'
+					and 
+						sb.userid =#{create_id} 
+					limit 1
+				 ) as service_setting_code
+				,a.title 				
+				,a.send_name 
+				,a.send_email
+				,a.send_content 
+				,a.training_type1 
+				,a.training_type2 
+				,a.training_type2_content 
+				,a.training_type3
+				,a.training_type3_file_type
+				,a.training_type3_file_exe_type 
+				,a.training_type3_file_name
+				,a.training_type3_file_redirect
+				,a.training_type3_content
+				,a.training_type3_exe_content
+				,a.start_date
+				,a.end_date
+				,now()
+				,now() 
+				,a.request_url 
+				,a.institution_code 
+				,'ready'
+				,a.del_type
+				,a.register_type
+				,a.register_url
+				,a.reservation_type
+				,a.reservation_date
+				,a.spam_type
+				,a.spam_time
+				,a.spam_number
+				,a.all_send_type
+				,a.send_number
+				,a.send_percent
+				,a.register_time_type
+				,a.register_time
+				,a.ig_code 
+				,#{create_id}
+				,a.type
+				from i_training as a  where a.code = #{code} )
+			]]>
+ 	</insert>
+ 	
+ 	
+ 	<delete id="deleteTrainingLogByCode" parameterType="String">
+ 	<![CDATA[	
+ 		delete from i_training_log where training_code = #{training_code} 
+ 	]]>
+ 	</delete>
+ 	
+ 	<delete id="deleteTrainingRegisterByCode" parameterType="String">
+	 	<![CDATA[
+	 		delete from i_training_register where training_code = #{training_code}
+	 	]]>
+ 	</delete>
+ 	<delete id="deleteTrainingByCode" parameterType="String">
+ 		<![CDATA[
+ 		delete from i_training where code  = #{code}
+ 		]]>
+ 	</delete>
+ 	
+ 	<delete id="deleteTrainingGroupByCode" parameterType="String">
+ 		<![CDATA[
+ 		delete from i_group where code  = #{code}
+ 		]]>
+ 	</delete>
+ 	
+ 	<update id="updateTrainingDate" parameterType="kr.nshare.training.service.TrainingVO">
+     	update i_training set 
+			end_date = #{end_date}
+		where code = #{code}
+    </update>
+
+ 	<!-- 취향분석 훈련 등록 step1 -->
+ 	<insert id="insertTraining2step1" parameterType="kr.nshare.training.service.TrainingVO" 
+ 			useGeneratedKeys="true" 
+ 			keyProperty="code">
+ 			
+ 			<![CDATA[
+	 		insert into i_training
+				(
+					uc 
+					,service_type
+					,service_setting_code
+					,tname 
+					,sdate 
+					,udate 
+					,request_url 
+					,institution_code 
+					,register_url
+					,ig_code
+					,create_id
+					,status
+					,type
+					
+				)
+				values
+				(
+					#{uc}
+					,#{service_type}
+					,#{service_setting_code}
+					,#{tname} 
+					,now()
+					,now() 
+					,#{request_url} 
+					,#{institution_code} 
+					,#{register_url}
+					,#{ig_code}
+					,#{create_id}
+					,'step1'
+					,'1'
+				);
+ 			]]>
+ 			
+ 	</insert>
+ 	
+ 	<!-- 취향분석 훈련 내용 수정 -->
+ 	<update id="updateTraining2" parameterType="kr.nshare.training.service.TrainingVO">
+		 	update i_training set 
+				tname                           			= #{tname} 
+				,service_setting_code              = #{service_setting_code}                    
+				,start_date                          	= #{start_date}               
+				,end_date                            	= #{end_date}                 
+				,udate                               		= now()       
+				,del_type								= #{del_type}
+				,register_type							= #{register_type}
+				,status									= #{status}
+				,reservation_type						= #{reservation_type}
+				,reservation_date						= #{reservation_date}
+				,spam_type								= #{spam_type}
+				,spam_time								= #{spam_time}
+				,spam_number							= #{spam_number}
+				,all_send_type							= #{all_send_type}
+				,send_number							= #{send_number}
+				,send_percent							= #{send_percent}
+				,register_time_type					= #{register_time_type}
+				,register_time							= #{register_time}                 
+			where code = #{code}
+ 	</update>
+ 	
+ 	
+ 	<insert id="insertTraining2grp" parameterType="kr.nshare.training.service.TrainingVO" useGeneratedKeys="true" 
+ 			keyProperty="code">
+ 		<![CDATA[
+	 		insert into i_training_grp(
+	 				training_code
+					,send_content 
+					,training_type1
+					,training_type2 
+					,training_type2_content 
+					,training_type2_linkname 
+					,training_type3 
+					,training_type3_file_type
+					,training_type3_file_exe_type 
+					,training_type3_file_name
+					,training_type3_file_redirect 
+					,training_type3_content
+					,training_type3_exe_content  
+					,request_url 
+					,tc_code
+					,gp_send_name
+					,gp_send_email
+					,gp_title
+	 		)
+			values	
+			(
+				 #{training_code}
+	            , #{send_content}
+	            , #{training_type1}
+	            , #{training_type2}
+	            , #{training_type2_content}
+	            , #{training_type2_linkname}
+	            , #{training_type3}
+	            , #{training_type3_file_type}
+	            , #{training_type3_file_exe_type}
+	            , #{training_type3_file_name}
+	            , #{training_type3_file_redirect}
+	            , #{training_type3_content}
+	            , #{training_type3_exe_content}
+	            , #{request_url}
+	            , #{tc_code}
+	            , #{gp_send_name}
+	            , #{gp_send_email}	 
+	            , #{gp_title}	         
+			);
+	 ]]>
+ 	</insert>
+ 			
+ 	<update id="updateTraining2grp" parameterType="kr.nshare.system.service.TemplateVO">
+ 		update i_training_grp set 
+ 					 gp_send_name         			 	    = #{gp_send_name}
+					,gp_send_email							= #{gp_send_email}
+					,gp_title										= #{gp_title}	
+ 		<if test="tc_code!= ''">		
+					,send_content 	         				= #{send_content}
+					,training_type1	          				= #{training_type1}
+					,training_type2 	        			    = #{training_type2}
+					,training_type2_content	     	 	= #{training_type2_content}
+					,training_type2_linkname 	    	= #{training_type2_linkname}
+					,training_type3 	        			    = #{training_type3}
+					,training_type3_file_type 	    	= #{training_type3_file_type}
+					,training_type3_file_exe_type 	    	= #{training_type3_file_exe_type}
+					,training_type3_file_name			= #{training_type3_file_name}
+					,training_type3_file_redirect 		= #{training_type3_file_redirect}
+					,training_type3_content 	    	= #{training_type3_content}
+					,training_type3_exe_content 	    	= #{training_type3_exe_content}
+					,tc_code						       	 	= #{tc_code}
+		</if>						
+	 		where training_code = #{training_code}
+		 		and 
+	    		 	 code=#{code}
+ 	</update>	
+ 	 	
+  	<insert id="insertTraining2User" parameterType="java.util.List">
+    	insert into i_training_user (
+		    		email
+		    		, training_code
+		    		, name
+		    		, department_name
+		    		, unikey
+		    		, sdate
+		    		, udate
+		    		,tg_code
+		    		) values    	
+        <foreach collection="list" item="element" separator=" , ">
+            (
+		            HEX(AES_ENCRYPT( #{element.email} , (select secret_key from i_configuration where code=1)))
+		            , #{element.training_code}
+		            , HEX(AES_ENCRYPT( #{element.name} , (select secret_key from i_configuration where code=1))) 
+		            , #{element.department_name}
+		            , #{element.unikey}
+		            , now()
+		            , now()
+		            , #{element.tg_code}
+	       	 )
+        </foreach>
+    </insert>
+    
+ 	   <!--  훈련 대상자 내용 삭제 -->
+ 	<delete id="deleteTraining2UserByCdoe" parameterType="kr.nshare.training.service.TrainingVO">
+ 			delete from i_training_user 
+ 			where
+ 				training_code = #{training_code}
+	 		<if test="code!= ''">		
+			and
+				code = #{code}
+			</if>	
+			<if test="tg_code!= ''">		
+			and
+				tg_code = #{tg_code}
+			</if>			
+    </delete>	 	
+    
+    <!-- 취향분석 training에 포함된 group 관련 내용 삭제 -->
+ 	<delete id="deleteTrainingGrpByCdoe" parameterType="kr.nshare.training.service.TrainingVO">
+    	delete from i_training_grp
+    	where 
+    		training_code = #{training_code}
+  	  <if test="code!= ''">		
+			and
+				code=#{code}
+		</if>		
+    </delete>
+     		
+ 		
+ 	<update id="updateTraining2UserbySelect" parameterType="kr.nshare.training.service.TrainingVO"> 
+ 			update i_training_user set 
+	            email 						 	= HEX(AES_ENCRYPT( #{email} , (select secret_key from i_configuration where code=1)))     	
+	    		, name  					 	= HEX(AES_ENCRYPT( #{name} , (select secret_key from i_configuration where code=1))) 
+	    		, department_name  	 	= #{department_name}
+	    		, unikey  					= #{unikey}  
+	    		, udate  					 	= now()
+	    		,tg_code  					= #{tg_code}    			 
+    		 where  code = #{code}		
+ 	</update>			
+ 	
+ 	<!-- 취향 분석 훈련에 등록된 user list  code 검색 -->
+    <select id="selectTraining2UserListByCode" parameterType="String" resultType="kr.nshare.training.service.TrainingVO">
+    select 	a.code
+				,AES_DECRYPT(UNHEX(a.email), (select secret_key from i_configuration where code=1)) as email
+				,a.training_code
+				,AES_DECRYPT(UNHEX(a.name), (select secret_key from i_configuration where code=1)) as name
+				,a.department_name
+				,a.unikey
+				,a.sdate
+				,a.udate
+				,a.tg_code
+    			, b.tc_code
+    			, b.gp_title
+    			, b.gp_send_name
+    			, b.gp_send_email
+    			, IF(b.training_type1!='','Y','N') as training_type1
+			    , IF(b.training_type2!='','Y','N') as training_type2
+			    , IF(b.training_type3!='','Y','N') as training_type3
+    			, c.cate_name
+    			, c.cate_code
+    			, c.template_name      
+    from i_training_user as a, i_training_grp as b, (
+																			select sb.code
+																					, sa.cate_name
+																					, sa.code as cate_code 
+																					, sb.template_name
+																			from i_template_cate as sa, i_template as sb
+																			where 
+																				sa.code = sb.cate_code																		
+																		) as c 
+    	where 		
+    		a.tg_code = b.code
+    	and
+    		b.tc_code = c.code	
+    	and 
+    		a.training_code = #{code}
+    	order by code asc 
+    </select>
+    
+    <!-- 취향 분석 훈련에 등록된 user list  code 검색(발송상태 포함) -->
+    <select id="selectTraining2UserListWithStatusByCode" parameterType="String" resultType="kr.nshare.training.service.TrainingVO">
+   		select 	
+   				a.code
+				,AES_DECRYPT(UNHEX(a.email), (select secret_key from i_configuration where code=1)) as email
+				,a.training_code
+				,AES_DECRYPT(UNHEX(a.name), (select secret_key from i_configuration where code=1)) as name
+				,a.department_name
+				,a.unikey
+				,a.sdate
+				,a.udate
+				,a.tg_code
+    			, b.tc_code
+    			, b.gp_title
+    			, b.gp_send_name
+    			, b.gp_send_email
+    			, IF(b.training_type1!='','Y','N') as training_type1
+			    , IF(b.training_type2!='','Y','N') as training_type2
+			    , IF(b.training_type3!='','Y','N') as training_type3
+    			, c.cate_name
+    			, c.cate_code
+    			, c.template_name  
+				, d.status    
+    from i_training_user as a, i_training_grp as b, (
+																			select sb.code
+																					, sa.cate_name
+																					, sa.code as cate_code 
+																					, sb.template_name
+																			from i_template_cate as sa, i_template as sb
+																			where 
+																				sa.code = sb.cate_code
+																		) as c , i_training_log as d
+    	where 		
+    		a.tg_code = b.code
+    	and
+    		b.tc_code = c.code	
+    	and
+		 	a.code = d.training_user_code
+		and 
+    		a.training_code = #{code}
+    	order by code asc 
+    </select>
+    
+    
+    <!-- 취향 분석 훈련에 등록된 grp list  검색 -->
+    <select id="selectTraining2GrpListByCode" parameterType="String" resultType="kr.nshare.training.service.TrainingVO">
+    		Select a.* 
+    				  , b.cate_name
+    				  , b.cate_code 
+    				  , b.template_name
+    				   ,b.cate_type
+    		from i_training_grp as a ,(
+														select sb.code
+																, sa.cate_name
+																, sa.code as cate_code 
+																, sb.template_name
+																, sa.cate_type
+														from i_template_cate as sa, i_template as sb
+														where 
+															sa.code = sb.cate_code
+														and
+															sa.useyn = 'y'
+														and
+															sb.useyn = 'y'
+													) as b 
+    		where 
+    			a.tc_code = b.code
+			 and 	
+    			training_code = #{code}
+    		order by b.cate_type,b.cate_code asc 
+     </select>
+     
+     
+ 	<select id="selectAllTemplistExceptGrp" parameterType="kr.nshare.training.service.TrainingVO" resultType="kr.nshare.training.service.TrainingVO">
+			select a.* 
+					,b.cate_name
+				from  i_template as a, i_template_cate as b
+				where 
+					a.cate_code=b.code
+				and
+					a.useyn="Y"
+				and
+					b.useyn="Y"
+				and
+					a.code not in (select tc_code 
+										 from i_training_grp
+										  where 
+										 training_code = #{training_code}
+											 <if test="tc_code!= ''">		
+													and
+														tc_code !=#{tc_code}
+											</if>		
+										 )
+				order by b.cate_type,a.cate_code asc 						 
+    </select>
+    
+    <!-- 취향 분석 훈련에 등록된 grp 중 user가 등록안된 grp 탐색 -->
+    <select id="selectTraining2GrpNoUser" parameterType="String" resultType="kr.nshare.training.service.TrainingVO">
+  		  select a.code as tg_code
+    			 , a.tc_code
+    			 , a.gp_title
+    			 , a.gp_send_name
+    			 , a.gp_send_email
+    			 , IF(a.training_type1!='','Y','N') as training_type1
+			  	 , IF(a.training_type2!='','Y','N') as training_type2
+			 	 , IF(a.training_type3!='','Y','N') as training_type3
+    			 , b.cate_name
+    			 , b.cate_code
+    			 , b.template_name
+		from i_training_grp as a, (	
+												select sb.code
+														, sa.cate_name
+														, sa.code as cate_code 
+														, sb.template_name
+												from i_template_cate as sa, i_template as sb
+												where 
+														sa.code = sb.cate_code													
+												) as b 
+		where 
+			a.training_code = #{code}
+		and 
+			a.tc_code = b.code
+		and 
+			a.code not in (
+									select 	ia.tg_code
+		 							from i_training_user as ia, i_training_grp as ib 
+		 							where 	
+		 								ia.training_code = #{code} 
+		 							and 
+		 								ia.tg_code=ib.code
+	 							)
+	 	order by a.code asc 
+    </select>
+    
+      <!-- 등록된 취향 분석 훈련의 상세 보기-->
+    <select id="selectTraining2DetailList" parameterType="String" resultType="kr.nshare.training.service.TrainingVO">
+   		select 
+   				a.tname
+			   , d.template_name
+			   , b.gp_send_name as send_name
+			   , b.gp_send_email as send_email 
+			   , b.training_type1
+			   , b.training_type2
+			   , b.training_type3
+		from i_training as a, i_training_grp as b, i_training_user as c, i_template as d
+		where
+			   a.code = b.training_code
+			and
+			   a.code = c.training_code
+			and
+			   b.code = c.tg_code
+			and
+			   b.tc_code = d.code
+			and 
+   				a.code = #{code}
+   			group by b.code 
+     </select>
+     
+     <!-- 취향분석 사용자 정보 및 훈련 정보 추출 -->
+     <select id="selectTraining2UserTrainingInfo" parameterType="kr.nshare.training.service.TrainingVO" resultType="kr.nshare.training.service.TrainingVO">
+   	select 
+		b.code
+		, b.training_code
+		, b.gp_send_name as send_name
+		, b.gp_send_email as send_email
+		, b.gp_title as title
+		, b.send_content
+		, b.training_type1
+		, b.training_type2
+		, b.training_type2_content
+		, b.training_type2_linkname
+		, b.training_type3
+		, b.training_type3_file_type
+		, b.training_type3_file_exe_type
+		, b.training_type3_file_name
+		, b.training_type3_file_redirect
+		, b.training_type3_content
+		, b.training_type3_exe_content
+		, b.request_url
+	from  i_training_user as a , i_training_grp as b 
+		where 
+			a.code = #{training_user_code}
+		and
+			a.training_code = #{training_code}
+		and
+			a.training_code = b.training_code
+		and
+			a.tg_code = b.code
+		
+     </select>
+     
+      <!-- 취향분석 사용자 정보 및 훈련 정보 추출 -->
+     <select id="selectTraining2GrpByCode" parameterType="kr.nshare.training.service.TrainingVO" resultType="kr.nshare.training.service.TrainingVO">
+     	select 
+		a.code
+		,   a.training_code
+		,	a.send_content
+		,	a.training_type1
+		,	a.training_type2
+		,	a.training_type2_content
+		,	a.training_type2_linkname
+		,	a.training_type3
+		,	a.training_type3_file_type
+		,	a.training_type3_file_exe_type
+		,	a.training_type3_file_name
+		,	a.training_type3_file_redirect
+		,	a.training_type3_content
+		,	a.training_type3_exe_content
+		,	a.tc_code
+		,	a.gp_send_name
+		,	a.gp_send_email
+		,	a.gp_title
+		,	b.template_name
+		,   c.code as cate_code 
+		,   c.cate_name
+	from  i_training_grp as a, i_template as b, i_template_cate as c
+		where 
+			  a.tc_code=b.code
+			and 
+				b.cate_code =  c.code
+		  and
+			a.code = #{tg_code}
+     </select>
+     
+     
+     <!-- 사용자 리스트 검색 -->
+    <select id="selectDeleteExpectedTrainingList" parameterType="kr.nshare.training.service.TrainingVO" resultType="kr.nshare.training.service.TrainingVO">
+    <![CDATA[
+    	select
+    		a.code 
+    		, a.service_type
+			, a.uc 
+			, replace(replace(tname,"'",""),"'","") as tname 
+			, a.sdate 
+			, a.status 
+			, a.del_type 
+			, a.del_flag
+    		, b.institution_name
+    		, (select group_name from i_group where code = a.ig_code) as group_name
+    		, (select count(*) from i_training_user where training_code = a.code) as user_cnt 
+    		,create_id 
+    		,(select AES_DECRYPT(UNHEX(name), (select secret_key from i_configuration where code=1)) from i_member where userid = a.create_id limit 1) as create_name
+    		,(select phone from i_member where userid = a.create_id limit 1) as create_phone
+    	from i_training as a, i_institution as b
+		where
+			a.institution_code = b.code
+		and 
+			del_flag = 'r'
+    ]]>		
+    	order by code desc limit #{startRowNum}, ${pageSize}
+    </select>
+    
+      <!-- 사용자 리스트 검색 -->
+    <select id="selectDeleteExpectedTrainingListCnt" parameterType="kr.nshare.training.service.TrainingVO" resultType="java.lang.Integer">
+ 	  	select
+    		 count(*)
+    	from i_training as a, i_institution as b
+		where
+			a.institution_code = b.code
+		and 
+			del_flag = 'r'
+    </select>
+    
+    
+ 	<!-- 하나의 훈련에 등록된 훈련 대상자 수  -->
+    <select id="selectTrainingUserCnt" parameterType="String" resultType="java.lang.Integer">
+		select count(*) from i_training_user where training_code =	#{code}	
+    </select>
+    
+</mapper>

@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+     PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+     "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+ 	
+    <mapper namespace="kr.nshare.member.service.mapper.MemberMapper">
+ 	
+ 	<!-- 사용자 아이디 비밀번호 체크 -->
+ 	<select id="selectUserById" parameterType="String" resultType="kr.nshare.member.service.MemberVO">
+ 		select userid, userpw from i_member where 1=1 
+ 		and
+ 			userid = #{userid}
+ 		
+ 	</select>
+ 	<!-- 로그인 log 저장 -->
+ 	<insert id="insertMemberLog" 
+	parameterType="kr.nshare.member.service.MemberVO">
+		insert into i_member_log 
+		(
+			im_code
+			, action 
+			, sdate 
+			, lev
+			, refer
+			, ip
+		) 
+		values
+		(
+			#{im_code}
+			, #{action}
+			, now()
+			, #{lev} 
+			, #{refer}
+			, HEX(AES_ENCRYPT(#{ip} , (select secret_key from i_configuration where code=1)))  
+		)
+		 
+	</insert>
+	
+	<!-- 접속로그 검색 cnt -->
+    <select id="selectMemberLogListCnt" parameterType="kr.nshare.system.service.SystemVO" resultType="java.lang.Integer">
+		select 
+			count(*) as cnt
+		from i_member_log as a, i_member as b
+		where
+			a.im_code = b.code
+		 
+    	<if test="searchKeyword!=null and searchKeyword != ''">
+    		    		
+			<if test="searchCondition=='name'">	
+				and AES_DECRYPT(UNHEX(b.name), (select secret_key from i_configuration where code=1)) like concat(#{searchKeyword},'%')
+			</if>
+			<if test="searchCondition=='userid'">	
+				and  b.userid like concat(#{searchKeyword},'%')
+			</if>
+		</if>
+    </select>
+    
+    <!-- 접속로그 검색 -->
+    <select id="selectMemberLogList" parameterType="kr.nshare.system.service.SystemVO" resultType="kr.nshare.system.service.SystemVO">
+    
+    	select 
+			a.code
+			,a.im_code 
+			,a.action
+			,a.sdate
+			,b.userid
+			, AES_DECRYPT(UNHEX(b.name), (select secret_key from i_configuration where code=1)) as name
+			, AES_DECRYPT(UNHEX(a.ip), (select secret_key from i_configuration where code=1)) as ip
+			,a.refer
+		from i_member_log as a, i_member as b
+		where
+			a.im_code = b.code
+		 
+    	<if test="searchKeyword!=null and searchKeyword != ''">
+    		    		
+			<if test="searchCondition=='name'">	
+				and  AES_DECRYPT(UNHEX(b.name), (select secret_key from i_configuration where code=1)) like concat(#{searchKeyword},'%')
+			</if>
+			<if test="searchCondition=='userid'">	
+				and  b.userid like concat(#{searchKeyword},'%')
+			</if>
+		</if>
+    	order by a.code desc limit #{startRowNum}, ${pageSize}
+    </select>
+    
+    
+    
+     <!-- 접속 로그 삭제 -->
+    <delete id="deleteMemberLogByMemberCode"  parameterType="String">
+		delete 
+		from i_member_log 
+		where 
+			im_code = #{code}
+	</delete>	
+    
+    <select id="selectMemberInstitutionList" parameterType="kr.nshare.member.service.MemberVO" resultType="kr.nshare.member.service.MemberVO">
+		select 
+			a.userid
+			, d.code as training_code
+		from i_member as a, i_auth_mapping as b, i_institution as c, i_training as d
+			where
+				a.code = b.member_code
+			and
+				b.institution_code = c.code
+			and
+				c.code = d.institution_code
+			and
+				a.userid = #{userid}
+			and
+				d.code = #{training_code}
+			and
+				(d.status = 'ready' or d.status='step1' or d.status='init' or d.status='stop' or d.status='end')
+    </select>
+ 
+ <select id="selectMemberInstitutionListAndTemplate" parameterType="kr.nshare.member.service.MemberVO" resultType="kr.nshare.member.service.MemberVO">
+		select 
+			a.userid
+			, d.code as training_code
+		from i_member as a, i_auth_mapping as b, i_institution as c, i_template as d
+			where
+				a.code = b.member_code
+			and
+				b.institution_code = c.code
+			and
+				c.code = d.institution_code
+			and 
+				d.institution_code = c.code
+			and
+				a.userid = #{userid}
+			and 
+				d.code=  #{template_code}
+    </select> 
+    
+	 <!-- 기관 코드로 계정 검색 -->
+    <select id="selectMemberByInstitutionCode" parameterType="String" resultType="kr.nshare.member.service.MemberVO">
+    	select a.*
+    			,b.institution_code 
+    	from i_member as a,i_auth_mapping as b 
+    	where 
+    		a.code = b.member_code
+    	and 
+    		b.institution_code = #{code} 
+    </select>
+    
+</mapper>

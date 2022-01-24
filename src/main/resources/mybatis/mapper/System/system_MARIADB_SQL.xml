@@ -1,0 +1,1282 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+     PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+     "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+ 	
+    <mapper namespace="kr.nshare.system.service.mapper.SystemMapper">
+ 	
+ 	
+ 	<!-- 사용자 등록 -->
+ 	<insert id="insertMember" parameterType="kr.nshare.system.service.SystemVO" useGeneratedKeys="true" keyProperty="code">
+ 	<![CDATA[
+ 		insert into i_member 
+ 			(
+	 			userid
+	 			, userpw
+	 			, name
+	 			, email
+	 			, fax
+	 			, phone
+	 			, comp_name
+	 			, zcode
+	 			, comp_addr1
+	 			, comp_addr2
+	 			, lev
+	 			, sdate
+	 			, udate
+	 			, cuser
+	 			
+ 			) values 
+ 			(
+ 				#{userid}
+ 				, #{userpw}
+ 				, HEX(AES_ENCRYPT( #{name} , (select secret_key from i_configuration where code=1)))  
+	 			, HEX(AES_ENCRYPT( #{email} , (select secret_key from i_configuration where code=1))) 
+	 			, #{fax}
+	 			, #{phone}
+	 			, #{comp_name}
+	 			, #{zcode}
+	 			, #{comp_addr1}
+	 			, #{comp_addr2}
+	 			, #{lev}
+	 			, now()
+	 			, now()
+	 			, #{cuser}
+ 			);
+ 		]]>
+ 	</insert>
+    
+    <!--  -->
+    <update id="updateMember" parameterType="kr.nshare.system.service.SystemVO">
+        update i_member set
+	     name 					= HEX(AES_ENCRYPT( #{name} , (select secret_key from i_configuration where code=1)))  
+	    , email					= HEX(AES_ENCRYPT( #{email} , (select secret_key from i_configuration where code=1))) 
+		, fax						= #{fax}
+		, phone					= #{phone}
+		, comp_name			= #{comp_name}
+		, zcode					= #{zcode}
+		, comp_addr1			= #{comp_addr1}
+		, comp_addr2			= #{comp_addr2}
+		, lev						= #{lev}
+		, udate					= now()
+		<if test="isChgPaswd eq '0'.toString()">
+			, userpw 			= #{userpw}
+			, init 			= 'n'
+		</if>
+		where code = #{code}
+    </update>
+    
+    <!-- 사용자 삭제 -->
+    <delete id="deleteMemberByCode"  parameterType="String">
+		delete 
+		from i_member 
+		where 
+			code = #{code}
+	</delete>	
+    
+    <!-- 사용자 삭제로 인한 템플릿 생성자 변경 -->
+	<update id="updateTemplateUcByCode" parameterType="kr.nshare.system.service.SystemVO">
+		update i_template set uc = #{member_code} 
+		where uc = #{code}	 
+	</update>
+    
+     <!-- 사용자 삭제로 인한 파일 생성자 변경 -->
+	<update id="updateFileUcByCode" parameterType="kr.nshare.system.service.SystemVO">
+		update i_file set uc = #{member_code} 
+		where uc = #{code}
+	</update>
+	
+	 <!-- 사용자 삭제로 인한 훈련 생성자 변경 -->
+	<update id="updateTrainingUcAndIdByCode" parameterType="kr.nshare.system.service.SystemVO">
+		update i_training set 
+				uc = #{member_code} 
+				,create_id = #{create_id} 
+		where uc = #{code}
+	</update>
+	
+	<!-- 사용자 삭제로 인한 훈련그룹 생성자 변경 -->
+	<update id="updateTrainingGroupIdAndIdByCode" parameterType="kr.nshare.system.service.SystemVO">
+		update i_group set 
+			create_user = #{create_id} 
+		where create_user = #{userid} 
+	</update>
+    
+    <!-- 사용자 총값 검색 -->
+    <select id="selectMemberListCnt" parameterType="kr.nshare.system.service.SystemVO" resultType="java.lang.Integer">
+    	select count(*) as total from i_member
+    	where 1=1
+    	<if test="searchKeyword!=null and searchKeyword != ''">
+			<if test="searchCondition=='name'">	
+				and  AES_DECRYPT(UNHEX(name), (select secret_key from i_configuration where code=1)) like concat(#{searchKeyword},'%')
+			</if>
+			<if test="searchCondition=='userid'">	
+				and  userid like concat(#{searchKeyword},'%')
+			</if>  
+			<if test="searchCondition=='email'">	
+				and AES_DECRYPT(UNHEX(email), (select secret_key from i_configuration where code=1)) like concat(#{searchKeyword},'%')		
+			</if>
+		</if>
+    </select>
+    
+    <!-- 사용자 리스트 검색 -->
+    <select id="selectMemberList" parameterType="kr.nshare.system.service.SystemVO" resultType="kr.nshare.system.service.SystemVO">
+    <![CDATA[
+    	select 
+			a.code
+			,a.userid
+			,a.userpw
+			, AES_DECRYPT(UNHEX(a.name), (select secret_key from i_configuration where code=1)) as name
+			,fax
+			,AES_DECRYPT(UNHEX(a.email), (select secret_key from i_configuration where code=1)) as email
+			,a.phone
+			,a.comp_name
+			,a.zcode
+			,a.comp_addr1
+			,a.comp_addr2
+			,a.lev
+			,a.institution_code
+			,a.sdate
+			,a.udate
+			,a.useyn
+			,a.cuser
+			, (	select count(*) from i_training_service where service_use = 'Y' and 
+					start_date <=   date_format(now(), '%Y-%m-%d')
+					and  end_date >=   date_format(now(), '%Y-%m-%d')
+					and uc = a.code
+			) as service_status_cnt
+			,a.init
+		 from i_member as a where 1=1 
+		]]>
+    	<if test="searchKeyword!=null and searchKeyword != ''">
+			<if test="searchCondition=='name'">	
+				and AES_DECRYPT(UNHEX(name), (select secret_key from i_configuration where code=1)) like concat(#{searchKeyword},'%')
+			</if>
+			<if test="searchCondition=='userid'">	
+				and  userid like concat(#{searchKeyword},'%')
+			</if>
+			<if test="searchCondition=='email'">	
+				and AES_DECRYPT(UNHEX(email), (select secret_key from i_configuration where code=1)) like concat(#{searchKeyword},'%')		
+			</if>
+		</if>
+    	order by code desc limit #{startRowNum}, ${pageSize}
+    </select>
+ 
+ 	<!-- 사용자 검색 by 사용자 아이디 -->
+ 	<select id="selectMemberById" parameterType="String" resultType="kr.nshare.system.service.SystemVO">
+ 		select  
+		 		code
+				,userid
+				,userpw
+				,AES_DECRYPT(UNHEX(name), (select secret_key from i_configuration where code=1)) as name
+				,fax
+				,AES_DECRYPT(UNHEX(email), (select secret_key from i_configuration where code=1)) as email
+				,phone
+				,comp_name
+				,zcode
+				,comp_addr1
+				,comp_addr2
+				,lev
+				,institution_code
+				,sdate
+				,udate
+				,useyn
+				,cuser
+				,paycnt
+				,init
+ 		from i_member 
+ 		where 1=1 and userid = #{userid} limit 1
+ 	</select>
+ 	
+ 	<!-- 사용자 검색 by 사용자 아이디 with 훈련 서비스 설정 정보 포함 -->
+ 	<select id="selectMemberByIdWithServiceSetting" parameterType="String" resultType="kr.nshare.system.service.SystemVO">
+ 			select  
+		 		ta.code
+				,ta.userid
+				,ta.userpw
+				,AES_DECRYPT(UNHEX(ta.name), (select secret_key from i_configuration where code=1)) as name
+				,ta.fax
+				,AES_DECRYPT(UNHEX(ta.email), (select secret_key from i_configuration where code=1)) as email
+				,ta.phone
+				,ta.comp_name
+				,ta.zcode
+				,ta.comp_addr1
+				,ta.comp_addr2
+				,ta.lev
+				,ta.institution_code
+				,ta.sdate
+				,ta.udate
+				,ta.useyn
+				,ta.cuser
+				,ta.paycnt
+				,ta.init
+				,tb.code as service_setting_code
+				,tb.title
+				,tb.start_date
+				,tb.end_date
+				,tb.test_send_number
+				,tb.real_send_number
+				,tb.service_use
+ 		from i_member as ta 	left join  ( select sa.*
+		 							 from  i_training_service as sa, i_member as sb
+									  where 
+									  		sa.uc=sb.code
+									  	and
+									  		sa.service_use= 'Y'
+									  	and 
+									  		sb.userid = #{userid}
+									)  as tb
+									on ta.code = tb.uc		
+ 		where 
+			ta.userid = #{userid}
+		limit 1
+ 	</select>
+ 	
+ 	<!--  사용자 검색 by code -->
+ 	<select id="selectMemberByCode" parameterType="String" resultType="kr.nshare.system.service.SystemVO">
+ 			select 
+				code
+				,userid
+				,userpw
+				,AES_DECRYPT(UNHEX(name), (select secret_key from i_configuration where code=1)) as name
+				,fax
+				,AES_DECRYPT(UNHEX(email), (select secret_key from i_configuration where code=1)) as email
+				,phone
+				,comp_name
+				,zcode
+				,comp_addr1
+				,comp_addr2
+				,lev
+				,institution_code
+				,sdate
+				,udate
+				,useyn
+				,cuser
+				,paycnt
+				,init 
+ 			from i_member 
+ 			where 1=1 
+ 			and code = #{code} limit 1
+ 	</select>
+ 
+ 	<!-- 
+	public void insertInstitution(SystemVO vo);
+	public void updateInstitution(SystemVO vo);
+	public SystemVO selectInstitutionByCode(String code);
+	public List<SystemVO> selectInstitutionList(SystemVO vo);
+	public int selectInstitutionListCnt(SystemVO vo);	
+	-->	
+	
+	<!-- 기관 리스트 -->
+	<select id="selectInstitutionList" parameterType="kr.nshare.system.service.SystemVO" resultType="kr.nshare.system.service.SystemVO">
+		select 
+			code
+			,institution_name
+			,AES_DECRYPT(UNHEX(institution_owner_name), (select secret_key from i_configuration where code=1)) as institution_owner_name
+			,AES_DECRYPT(UNHEX(institution_owner_email), (select secret_key from i_configuration where code=1)) as institution_owner_email
+			,institution_owner_phone
+			,institution_owner_location
+			,sdate
+			,udate
+			,create_userid
+			,useyn
+		from i_institution 
+			where 
+				1=1
+				<if test="searchKeyword!=null and searchKeyword != ''">
+					<if test="searchCondition=='institution_name'">	
+						and  institution_name like concat(#{searchKeyword},'%')
+					</if>
+					<if test="searchCondition=='institution_owner_name'">	
+						and AES_DECRYPT(UNHEX(institution_owner_name), (select secret_key from i_configuration where code=1)) like concat(#{searchKeyword},'%')
+					</if>
+				</if>
+				<if test="useyn != '' and useyn!=null and useyn=='0' ">
+					and useyn = #{useyn}
+				</if>
+				
+			order by code desc limit #{startRowNum}, ${pageSize}
+	</select>
+	<!-- 기관 리스트 총합계 -->
+	<select id="selectInstitutionListCnt" parameterType="kr.nshare.system.service.SystemVO" resultType="java.lang.Integer">
+		select count(*) as total from i_institution 
+			where 
+				1=1
+				
+				<if test="searchKeyword!=null and searchKeyword != ''">
+					<if test="searchCondition=='institution_name'">	
+						and  institution_name like concat(#{searchKeyword},'%')
+					</if>
+					<if test="searchCondition=='institution_owner_name'">	
+						and  AES_DECRYPT(UNHEX(institution_owner_name), (select secret_key from i_configuration where code=1)) like concat(#{searchKeyword},'%')
+					</if>
+				</if>
+				<if test="useyn != '' and useyn!=null and useyn=='0' ">
+					and useyn = #{useyn}
+				</if>
+				
+	</select>
+	
+	<!-- 현재 사용중인 기관 
+	select * from i_institution
+ 		where 1=1
+ 		and code in (
+			select b.code from i_member as a , i_institution as b , i_auth_mapping as c
+			where
+				a.code = c.member_code
+			and b.code = c.institution_code
+			
+		)
+	-->
+	<select id="selectAllInstitutionList" parameterType="kr.nshare.system.service.SystemVO" resultType="kr.nshare.system.service.SystemVO">
+		select 
+			code
+			,institution_name
+			,AES_DECRYPT(UNHEX(institution_owner_name), (select secret_key from i_configuration where code=1)) as institution_owner_name
+			,AES_DECRYPT(UNHEX(institution_owner_email), (select secret_key from i_configuration where code=1)) as institution_owner_email
+			,institution_owner_phone
+			,institution_owner_location
+			,sdate
+			,udate
+			,create_userid
+			,useyn
+		 from i_institution
+	</select>
+	
+	<!-- 기관 상세 -->
+	<select id="selectInstitutionByCode" parameterType="String" resultType="kr.nshare.system.service.SystemVO">
+		select 
+			code
+			,institution_name
+			,AES_DECRYPT(UNHEX(institution_owner_name), (select secret_key from i_configuration where code=1)) as institution_owner_name
+			,AES_DECRYPT(UNHEX(institution_owner_email), (select secret_key from i_configuration where code=1)) as institution_owner_email
+			,institution_owner_phone
+			,institution_owner_location
+			,sdate
+			,udate
+			,create_userid
+			,useyn 
+		from i_institution 
+			where 
+				1=1 
+			and 
+				code = #{code}
+	</select>
+	
+	<!-- 기관 등록 -->
+	<insert id="insertInstitution" parameterType="kr.nshare.system.service.SystemVO" useGeneratedKeys="true" keyProperty="code">
+		insert into i_institution 
+ 			(
+	 			institution_name
+	 			, institution_owner_name
+	 			, institution_owner_email
+	 			, institution_owner_phone
+	 			, institution_owner_location
+	 			, sdate
+	 			, create_userid
+	 			
+ 			) values 
+ 			(
+ 				#{institution_name}
+ 				, HEX(AES_ENCRYPT(#{institution_owner_name} , (select secret_key from i_configuration where code=1)))  
+ 				, HEX(AES_ENCRYPT(#{institution_owner_email} , (select secret_key from i_configuration where code=1)))   
+	 			, #{institution_owner_phone}
+	 			, #{institution_owner_location}
+	 			, now()
+	 			, #{create_userid}
+ 			);
+	</insert>
+	
+	<!-- 기관  삭제 -->
+	<delete id="deleteInstitutionByCode"  parameterType="String">
+		delete from i_institution 
+		where 
+			code = #{code}
+	</delete>	
+	
+	<!-- 기관 수정 -->
+	<update id="updateInstitution" parameterType="kr.nshare.system.service.SystemVO">
+		update i_institution set 
+			institution_name 							= #{institution_name} 
+			, institution_owner_name				= HEX(AES_ENCRYPT(#{institution_owner_name} , (select secret_key from i_configuration where code=1))) 
+			, institution_owner_email				= HEX(AES_ENCRYPT(#{institution_owner_email} , (select secret_key from i_configuration where code=1)))   
+			, institution_owner_phone				= #{institution_owner_phone}
+			, institution_owner_location			= #{institution_owner_location}
+			, udate										= now()										
+			, create_userid							= #{cuser}
+		where 
+			code = #{code}		
+	</update>
+	
+	<!-- 맵핑정보 by member_code  -->
+	<select id="selectAuthMappingListByMemberCode" parameterType="String" resultType="kr.nshare.system.service.SystemVO">
+		select 
+			a.code
+			, a.member_code
+			, a.institution_code
+			, b.institution_name
+			, b.sdate
+		from i_auth_mapping  as a, i_institution as b
+				where 1=1
+				and a.member_code = #{member_code}
+				and a.institution_code = b.code
+				order by a.code desc	
+	</select>
+	
+	<insert id="insertAuthMapping" parameterType="kr.nshare.system.service.SystemVO">
+		insert into i_auth_mapping 
+		(
+			member_code
+			, institution_code
+			, sdate
+		)
+		values
+		(
+			#{member_code}
+			, #{institution_code}
+			, now()
+		)
+	</insert>
+	
+	<delete id="deleteAuthMappingByMemberCode" parameterType="String">
+		delete from i_auth_mapping 
+		where member_code = #{member_code}
+	</delete>
+	
+	<update id="updateAuthMapping" parameterType="kr.nshare.system.service.SystemVO">
+	
+	</update>
+	
+	<delete id="deleteAuthMapping" parameterType="kr.nshare.system.service.SystemVO">
+	
+	</delete>
+    
+    <!-- 과금 등록 -->
+    <insert id="insertPayment" parameterType="kr.nshare.system.service.SystemVO">
+    	insert into i_payment_history
+   		(
+    		userid
+    		, type
+    		, now_count
+    		, comment
+    		, sdate
+    		, training_code
+   		)
+    	values
+   		(
+   			#{userid}
+   			,#{type}
+   			,#{now_count}
+   			,#{comment}
+   			, now()
+   			,#{training_code}    			
+   		)
+    </insert>
+        
+    <!-- 과금 현재 갯수 업데이트 -->
+    <update id="updatePayCntMember" parameterType="kr.nshare.system.service.SystemVO">
+    	update i_member set 
+    		paycnt = #{paycnt}
+    	where
+    		code = #{code}
+    
+    </update>
+    
+    <!-- 과금 리스트 -->
+    <select id="selectPayMentList" 
+    			parameterType="kr.nshare.system.service.SystemVO" 
+    			resultType="kr.nshare.system.service.SystemVO">
+		    	select b.* 
+			    	,AES_DECRYPT(UNHEX(a.name), (select secret_key from i_configuration where code=1)) as name 
+			    	,(select ifnull(tname,'') from i_training where code = b.training_code) as training_name 
+		    	from i_member as a, i_payment_history as b left outer join i_training as c
+		    	on 	b.training_code = c.code
+					where
+						a.userid = b.userid
+						<if test="searchCondition != '' and searchCondition!=null">
+							<if test="searchCondition=='userid'">
+									and b.userid like concat(#{searchKeyword},'%')
+							</if>
+							<if test="searchCondition=='name'">
+									and AES_DECRYPT(UNHEX(a.name), (select secret_key from i_configuration where code=1)) like concat(#{searchKeyword},'%')
+							</if>
+						</if>
+						<if test="lev!= 'admin'">		
+							and
+								c. institution_code in (
+									select b.code from i_member as a, i_institution as b, i_auth_mapping as c
+									where
+										a.code = c.member_code
+									and
+										b.code = c.institution_code
+									and
+										a.userid = #{userid}
+								)
+						</if>
+				order by code desc limit #{startRowNum}, ${pageSize}
+    </select>
+    <select id="selectPayMentListCnt" 
+    			parameterType="kr.nshare.system.service.SystemVO" 
+    			resultType="java.lang.Integer">
+		    	select count(*) as cnt from i_member as a, i_payment_history as b, i_training as c
+					where
+						a.userid = b.userid 
+					and
+						b.training_code = c.code
+					<if test="searchCondition != '' and searchCondition!=null">
+						<if test="searchCondition=='userid'">
+								and b.userid like concat(#{searchKeyword},'%')
+						</if>
+						<if test="searchCondition=='name'">
+								and AES_DECRYPT(UNHEX(a.name), (select secret_key from i_configuration where code=1)) like concat(#{searchKeyword},'%')
+						</if>
+					</if>
+					<if test="lev!= 'admin'">		
+							and
+								c. institution_code in (
+									select b.code from i_member as a, i_institution as b, i_auth_mapping as c
+									where
+										a.code = c.member_code
+									and
+										b.code = c.institution_code
+									and
+										a.userid = #{userid}
+								)
+						</if>
+					
+    </select>
+ 	 <select id="selectEmailSendLogListCnt" 
+    			parameterType="kr.nshare.system.service.SystemVO" 
+    			resultType="java.lang.Integer">
+			select 
+				count(*)
+			from (
+					select 
+						c.code
+						,a.tname
+						,case a.type when '0' then  a.send_email when '1' then (select sa.gp_send_email from i_training_grp as sa where b.tg_code = sa.code ) end  as send_email
+						,case a.type when '0' then  a.send_name when '1' then (select sa.gp_send_name from i_training_grp as sa where b.tg_code = sa.code ) end  as send_name
+						,case a.type when '0' then  a.title when '1' then (select sa.gp_title from i_training_grp as sa where b.tg_code = sa.code ) end  as title
+						,case a.type when '0' then  a.send_content when '1' then (select sa.send_content from i_training_grp as sa where b.tg_code = sa.code ) end  as send_content
+						, d.institution_name
+						, AES_DECRYPT(UNHEX(b.email), (select secret_key from i_configuration where code=1)) as email
+						, AES_DECRYPT(UNHEX(b.name), (select secret_key from i_configuration where code=1)) as name
+						, b.department_name
+						, b.unikey
+						, c.status 
+						, c.log
+						, c.sdate
+						, c.send_date
+					from i_training as a, i_training_user as b , i_training_log as c, i_institution as d
+						where
+							a.code = b.training_code
+						and
+							a.code = c.training_code
+						and
+							b.code = c.training_user_code
+						and
+							a.institution_code = d.code
+						<if test="lev!= 'admin'">		
+							and
+								a. institution_code in (
+									select b.code from i_member as a, i_institution as b, i_auth_mapping as c
+									where
+										a.code = c.member_code
+									and
+										b.code = c.institution_code
+									and
+										a.userid = #{userid}
+								)
+						</if>
+						and c.sdate between concat(#{searchBgnDe},' 00:00:00') and concat(#{searchEndDe},'23:59:59')
+					) as tb
+			where 
+				1=1
+			<if test="searchCondition != '' and searchCondition!=null">
+				<if test="searchCondition=='tname'">
+						and tname like concat(#{searchKeyword},'%')
+				</if>
+				<if test="searchCondition=='send_name'">
+						and send_name like concat(#{searchKeyword},'%')
+				</if>
+				<if test="searchCondition=='send_email'">
+						and send_email like concat(#{searchKeyword},'%')
+				</if>
+				<if test="searchCondition=='email'">
+						and  AES_DECRYPT(UNHEX(email), (select secret_key from i_configuration where code=1)) like concat(#{searchKeyword},'%')
+				</if>
+				<if test="searchCondition=='name'">
+						and AES_DECRYPT(UNHEX(name), (select secret_key from i_configuration where code=1))  like concat(#{searchKeyword},'%')
+				</if>
+			</if>
+					
+    </select>
+ 	<select id="selectEmailSendLogList"
+ 				parameterType="kr.nshare.system.service.SystemVO" 
+ 				resultType="kr.nshare.system.service.SystemVO">
+ 				select * 
+ 				from (
+ 					select 
+						c.code
+						,a.tname
+						,case a.type when '0' then  a.send_email when '1' then (select sa.gp_send_email from i_training_grp as sa where b.tg_code = sa.code ) end  as send_email
+						,case a.type when '0' then  a.send_name when '1' then (select sa.gp_send_name from i_training_grp as sa where b.tg_code = sa.code ) end  as send_name
+						,case a.type when '0' then  a.title when '1' then (select sa.gp_title from i_training_grp as sa where b.tg_code = sa.code ) end  as title
+						,case a.type when '0' then  a.send_content when '1' then (select sa.send_content from i_training_grp as sa where b.tg_code = sa.code ) end  as send_content
+						, d.institution_name
+						, AES_DECRYPT(UNHEX(b.email), (select secret_key from i_configuration where code=1)) as email
+						, AES_DECRYPT(UNHEX(b.name), (select secret_key from i_configuration where code=1)) as name
+						, b.department_name
+						, b.unikey
+						, c.status 
+						, c.log
+						, c.sdate
+						, c.send_date
+					from i_training as a, i_training_user as b , i_training_log as c, i_institution as d
+						where
+							a.code = b.training_code
+						and
+							a.code = c.training_code
+						and
+							b.code = c.training_user_code
+						and
+							a.institution_code = d.code
+						and 
+							c.sdate between concat(#{searchBgnDe},' 00:00:00') and concat(#{searchEndDe},'23:59:59')
+						<if test="lev!= 'admin'">		
+						and
+							a. institution_code in (
+								select b.code from i_member as a, i_institution as b, i_auth_mapping as c
+								where
+									a.code = c.member_code
+								and
+									b.code = c.institution_code
+								and
+									a.userid = #{userid}
+							)
+						</if>
+				) as tb
+				where 
+					1=1
+				<if test="searchCondition != '' and searchCondition!=null">
+						<if test="searchCondition=='tname'">
+								and tname like concat(#{searchKeyword},'%')
+						</if>
+						<if test="searchCondition=='send_name'">
+								and send_name like concat(#{searchKeyword},'%')
+						</if>
+						<if test="searchCondition=='send_email'">
+								and send_email like concat(#{searchKeyword},'%')
+						</if>
+						<if test="searchCondition=='email'">
+								and AES_DECRYPT(UNHEX(email), (select secret_key from i_configuration where code=1))  like concat(#{searchKeyword},'%')
+						</if>
+						<if test="searchCondition=='name'">
+								and AES_DECRYPT(UNHEX(name), (select secret_key from i_configuration where code=1)) like concat(#{searchKeyword},'%')
+						</if>
+				</if>
+				order by code desc limit #{startRowNum}, ${pageSize}			
+ 	</select>
+	
+	<!-- 최초접속시 비밀번호 변경처리 -->
+	<update id="updateMemberFirstPasswd" parameterType="kr.nshare.system.service.SystemVO">
+		update i_member set 
+			userpw = #{chgPasswd}
+			, init 		= 'y'
+		where
+			userid = #{userid}
+		and
+			userpw = #{userpw}
+		and
+			init 		= 'n' 
+		
+	</update> 	
+	
+	<select id="selectTemplateList"  parameterType="kr.nshare.system.service.TemplateVO" resultType="kr.nshare.system.service.TemplateVO">
+		select
+		a.cate_name
+		,
+		(
+			case 
+				when b.institution_code is null or b.institution_code ='' then '기관공통' 
+				else (select institution_name from i_institution  where code = b.institution_code order by code desc limit 1)
+			end 
+		) as institution_name
+		, b.* 
+		from i_template_cate as a, i_template as b
+			where 
+				a.code = b.cate_code
+			and
+				a.useyn = 'y'
+			and
+				b.useyn = 'y'
+			<if test="lev=='institution_admin'">
+			and 
+				b.institution_code in (select b.institution_code from i_member as a, i_auth_mapping as b
+					where
+						a.code = b.member_code 
+					and
+						a.userid = #{userid}
+				)
+			</if>
+			<if test="searchCondition != '' and searchCondition!=null">
+						<if test="searchCondition=='template_name'">
+								and b.template_name like concat(#{searchKeyword},'%')
+						</if>
+						<if test="searchCondition=='cate_name'">
+								and a.cate_name like concat(#{searchKeyword},'%')
+						</if>
+				</if>	
+				order by b.code desc limit #{startRowNum}, ${pageSize}
+				
+	</select>
+ 		
+ 	<select id="selectTemplateListCnt" parameterType="kr.nshare.system.service.TemplateVO" resultType="java.lang.Integer">
+ 		select count(*) from i_template_cate as a, i_template as b
+			where 
+				a.code = b.cate_code
+			and
+				a.useyn = 'y'
+			and
+				b.useyn = 'y'
+			<if test="lev=='institution_admin'">
+				and
+				b.institution_code in (select b.institution_code from i_member as a, i_auth_mapping as b
+					where
+						a.code = b.member_code 
+					and
+						a.userid = #{userid}
+				)
+			</if>
+			
+			
+			<if test="searchCondition != '' and searchCondition!=null">
+						<if test="searchCondition=='template_name'">
+								and b.template_name like concat(#{searchKeyword},'%')
+						</if>
+						<if test="searchCondition=='cate_name'">
+								and a.cate_name like concat(#{searchKeyword},'%')
+						</if>
+				</if>	
+				
+ 	</select>
+ 	
+ 	<select id="selectTemplateByCode"  parameterType="String" resultType="kr.nshare.system.service.TemplateVO">
+ 		select 
+ 			b.cate_name
+			, a.* 
+ 		from i_template as a, i_template_cate as b 
+ 			where
+ 				b.code = a.cate_code
+ 			and
+ 				a.code = #{code}
+ 	</select>
+ 	
+ 	
+ 	
+ 	
+ 	<select id="selectTemplateCateList" parameterType="kr.nshare.system.service.TemplateVO" resultType="kr.nshare.system.service.TemplateVO">
+	 	select 
+			code
+			,cate_name
+			,useyn 
+			, sdate
+			, cnt
+			, institution_cnt
+			, (cnt-institution_cnt) as not_institution_cnt
+			, (select count(*) from i_template_cate_word where tc_code = tb.code) as word_cnt
+		from 
+			(
+				select 
+					a.*
+					, count(b.code) as cnt
+					, COUNT(CASE WHEN b.institution_code is not null >0 THEN 1 END) AS institution_cnt
+					
+				from i_template_cate as a left outer join (select * from i_template where useyn='y') as b
+				on 	
+					a.code = b.cate_code
+				where a.useyn = 'y'
+				group by a.code 
+				order by a.cate_type,code ASC
+			) as tb 
+ 	</select>
+ 	
+ 	<!-- 템플릿 등록 -->
+ 	<insert id="insertTemplate" parameterType="kr.nshare.system.service.TemplateVO" useGeneratedKeys="true" keyProperty="code">
+ 	<![CDATA[
+ 				insert into i_template
+				(
+					uc 
+					, title 
+					, template_name
+					, cate_code
+					, send_name 
+					, send_content 
+					, training_type1 
+					, training_type2 
+					, training_type2_content 
+					, training_type3 
+					, training_type3_file_type
+					, training_type3_file_exe_type 
+					, training_type3_file_name
+					, training_type3_file_redirect
+					, training_type3_content 
+					, training_type3_exe_content 
+					, sdate 
+					, register_type
+					, institution_code
+					, send_email
+				)
+				values
+				(
+					#{uc}
+					, #{title} 
+					, #{template_name}
+					, #{cate_code}
+					, #{send_name} 
+					, #{send_content} 
+					, #{training_type1} 
+					, #{training_type2} 
+					, #{training_type2_content} 
+					, #{training_type3}
+					, #{training_type3_file_type} 
+					, #{training_type3_file_exe_type} 
+					, #{training_type3_file_name}
+					, #{training_type3_file_redirect}
+					, #{training_type3_content}
+					, #{training_type3_exe_content}
+					, now()
+					, #{register_type}
+					, #{institution_code}
+					, #{send_email}
+				)
+ 		]]>
+ 	</insert>
+    
+    <!-- 템플릿 수정  -->
+    <update id="updateTemplate" parameterType="kr.nshare.system.service.TemplateVO">
+		update i_template set
+			uc 									= #{uc}
+			,title 									= #{title}
+			,template_name 					= #{template_name}
+			,cate_code 						= #{cate_code}
+			,send_name 						= #{send_name}
+			,send_content 					= #{send_content}
+			,training_type1 					= #{training_type1}
+			,training_type2 					= #{training_type2}
+			,training_type2_content 		= #{training_type2_content}
+			,training_type3 					= #{training_type3}
+			,training_type3_file_type 		= #{training_type3_file_type}
+			,training_type3_file_exe_type 		= #{training_type3_file_exe_type}
+			,training_type3_file_name 		= #{training_type3_file_name}
+			,training_type3_file_redirect	= #{training_type3_file_redirect}
+			,training_type3_content 		= #{training_type3_content}
+			,training_type3_exe_content 	= #{training_type3_exe_content}
+			,register_type 						= #{register_type}
+			,institution_code					= #{institution_code}
+			,send_email							= #{send_email}
+		where code = #{code}
+	</update>	
+	
+	<!-- 한 템플릿에 대한 비활성화 -->
+	<update id="updateDisabledTemplateByCode" parameterType="String">
+		update i_template set 
+		useyn = 'n'
+		 where  code = #{code}		 
+	</update>
+	
+	<!-- 한 카테고리에 포함된 템플릿 비활성화 -->
+	<update id="updateDisabledTemplatesByCateCode" parameterType="String">
+		update i_template set 
+		useyn = 'n'
+		 where  cate_code = #{code}		 
+	</update>
+	
+	<delete id="deleteTemplateByInstitutionCode"  parameterType="String">
+		delete 
+		from i_template 
+		where 
+			institution_code = #{code}
+	</delete>	
+	
+		
+	<!-- 카테고리 비활성화 -->
+	<update id="updateDisabledCategoryByCode" parameterType="String">
+		update i_template_cate set 
+		useyn = 'n'
+		 where  code = #{code}		 
+	</update>
+	
+	<update id="updateCategory" parameterType="kr.nshare.system.service.TemplateVO">
+		update i_template_cate set
+			cate_name = #{cate_name}
+		 where  code = #{code}		 
+	</update>
+	
+	<select id="selectTemplateRandomAllList" resultType="kr.nshare.system.service.TemplateVO">
+	 	select a.cate_name, b.*
+	 	from i_template_cate as a, (select * from i_template where useyn='y' order by rand() desc ) as b
+  		 where
+      			a.code = b.cate_code 
+      	and 
+      		a.useyn='y'
+   		group by a.code 
+ 			<if test="cate_code != '' and cate_code">
+				and
+ 					a.cate_code = #{cate_code}			
+			</if>	 
+	</select>
+	
+	<select id="selectTemplateAllList" parameterType="kr.nshare.system.service.TemplateVO" resultType="kr.nshare.system.service.TemplateVO">
+		 select 
+	 			b.cate_name
+				, a.* 
+	 		from i_template as a, i_template_cate as b 
+	 			where
+	 				b.code = a.cate_code
+	 			<if test="cate_code != '' and cate_code">
+					and
+	 					a.cate_code = #{cate_code}			
+				</if>	
+	 	order by a.template_name asc 
+	</select>
+	
+	
+	<select id="selectTemplateCateWordByCateCode"  parameterType="String" resultType="kr.nshare.system.service.TemplateVO">
+		select
+			code 
+			, tc_code
+			, word
+			, val
+			, ORD
+		from i_template_cate_word 
+		where tc_code = #{tc_code}
+		order by ord asc 
+		
+	</select>	    
+	
+	<update 	id="updateTemplateCateWord" parameterType="kr.nshare.system.service.TemplateVO">
+		update i_template_cate_word set 
+			tc_code = #{tc_code}
+			, word	= #{word}
+			, val		= #{val}
+			, ord		= #{ord}
+			, sdate 	= now()
+		where
+			tc_code = #{tc_code}
+		and
+			code 		= #{code}	
+	</update>
+	
+	<insert id="insertCategory" 
+ 			parameterType="kr.nshare.system.service.TemplateVO" 
+ 			useGeneratedKeys="true" 
+ 			keyProperty="code">
+ 		<![CDATA[
+	 		insert into i_template_cate
+				(
+					cate_name, 
+					useyn, 
+					sdate, 
+					cate_type					
+				)
+				values
+				(
+					#{cate_name} 
+					,'y'
+					,now()
+					,'0' 					
+				);
+ 			]]>
+ 	</insert>
+	
+	
+	<insert id="insertTemplateCateWord"  parameterType="java.util.List">
+		insert into  i_template_cate_word(tc_code, word, val	, ord, sdate) values 
+		<foreach collection="list" item="element" separator=" , ">
+		(
+				 #{element.tc_code}
+				, #{element.word}
+				, #{element.val}
+				, #{element.ord}
+				, now()
+		)
+		</foreach>
+	</insert>
+	
+	
+	<delete id="deleteTemplateCateWord"  parameterType="String">
+		delete 
+		from i_template_cate_word 
+		where 
+			tc_code = #{code}
+	</delete>	
+	
+ 	
+ 	<!-- 카테고리명 검색 -->
+ 	<select id="selectTemplateCateDetailByCode" parameterType="String" resultType="kr.nshare.system.service.TemplateVO" >
+ 		select * from i_template_cate 
+ 			where code = #{code}
+ 	</select>
+ 	
+ 	<!-- 카테고리 등록단어 전체 가져오기  -->
+ 	<select id="selectTemplateCateWordAllList"  parameterType="String"  resultType="kr.nshare.system.service.TemplateVO">
+ 		select 
+			  a.code      as tc_code
+			  ,a.cate_name
+			  ,a.cate_type
+			  ,c.word
+			  ,c.val
+			  ,c.code as ttttt
+		from i_template_cate as a, (select * from i_template where useyn = 'y') as b, i_template_cate_word as c
+		   where
+		      a.code = b.cate_code
+		   and
+		      a.code = c.tc_code
+		   and 
+		   	 a.useyn = 'y' 
+		   and
+		      (b.institution_code is null or b.institution_code='' or b.institution_code in(
+			      																											select 
+																													            b.code
+																													         from i_member as a,i_institution as b , i_auth_mapping as c 
+																													         where
+																													            a.code = c.member_code
+																													         and
+																													            b.code = c.institution_code
+																													         and
+																													            a.userid =#{userid}
+			      																										   ) 
+		      )
+		   group by c.code
+ 	</select>
+ 	
+ 	  <!-- 훈련 서비스  설정  등록 -->
+    <insert id="insertServiceSetting" parameterType="kr.nshare.system.service.SystemVO"
+    		useGeneratedKeys="true" 
+ 			keyProperty="code">
+    	insert into i_training_service
+   		(
+    		uc
+    		, title
+    		, start_date
+    		, end_date
+    		, test_send_number
+    		, real_send_number
+    		, auto_del_type
+    		, auto_test_del_date
+    		, auto_real_del_date
+    		, passive_del_type
+    		, passive_test_del_date
+    		, passive_real_del_date
+    		, service_use
+    		,create_user
+    		, sdate
+    		, udate
+   		)
+    	values
+   		(
+   			#{uc}
+    		, #{title}
+    		, #{start_date}
+    		,#{ end_date}
+    		,#{test_send_number}
+    		, #{real_send_number}
+    		, #{auto_del_type}
+    		, #{auto_test_del_date}
+    		, #{auto_real_del_date}
+    		, #{passive_del_type}
+    		, #{passive_test_del_date}
+    		, #{passive_real_del_date}
+    		, #{service_use}
+    		, #{create_user}
+    		, now()
+    		, now()
+   		)
+    </insert>
+    
+      <!-- 훈련 서비스  설정  로그  등록 -->
+    <insert id="insertServiceSettingLog" parameterType="kr.nshare.system.service.SystemVO">
+    	insert into i_training_service_log
+   		(
+    		uc
+    		,type
+    		, comment
+    		, start_date
+    		, end_date
+    		, test_send_number
+    		, real_send_number
+    		, auto_del_type
+    		, auto_test_del_date
+    		, auto_real_del_date
+    		, passive_del_type
+    		, passive_test_del_date
+    		, passive_real_del_date
+    		, service_code
+    		, training_code
+    		, create_user
+    		, sdate
+   		)
+    	values
+   		(
+   			#{uc}
+   			,#{type} 
+   			,#{comment}
+    		, #{start_date}
+    		,#{ end_date}
+    		,#{test_send_number}
+    		, #{real_send_number}
+    		, #{auto_del_type}
+    		, #{auto_test_del_date}
+    		, #{auto_real_del_date}
+    		, #{passive_del_type}
+    		, #{passive_test_del_date}
+    		, #{passive_real_del_date}
+    		, #{service_code}
+    		, #{training_code}
+    		, #{create_user}
+    		, now()
+   		)
+    </insert>
+    
+     <update id="updateServiceSetting" parameterType="kr.nshare.system.service.SystemVO">
+        update i_training_service set
+    		 title							= #{title}
+    		, start_date				= #{start_date}
+    		, end_date					= #{end_date}
+    		, test_send_number		= #{test_send_number}
+    		, real_send_number		= #{real_send_number}
+    		, auto_del_type			= #{auto_del_type}
+    		, auto_test_del_date	= #{auto_test_del_date}
+    		, auto_real_del_date		= #{auto_real_del_date}
+    		, passive_del_type		= #{passive_del_type}
+    		, passive_test_del_date	= #{passive_test_del_date}
+    		, passive_real_del_date	= #{passive_real_del_date}
+    		, service_use				= #{service_use}
+    		, udate						=  now()	
+		where code = #{code}
+    </update>
+    
+     <update id="updateServicStatusByUc" parameterType="kr.nshare.system.service.SystemVO">
+        update i_training_service set
+    		 service_use				= #{service_use}
+    		, udate						=  now()	
+		where uc = #{uc}
+    </update>
+    
+ 	<!--코드에 의한 서비스 로드-->
+ 	<select id="selectServiceByCode" parameterType="String" resultType="kr.nshare.system.service.SystemVO" >
+ 		select * from i_training_service 
+ 			where code = #{code}
+ 	</select>
+ 	
+ 	<!--계정에 포함된 모든  서비스 설정 불러오기-->
+ 	<select id="selectServiceByUserCode" parameterType="String" resultType="kr.nshare.system.service.SystemVO" >
+ 		select * from i_training_service 
+ 			where uc = #{uc}
+ 	</select>
+ 	
+ 	 <!-- 서비스 설정 로그  -->
+    <select id="selectServiceLogList" 
+    			parameterType="kr.nshare.system.service.SystemVO" 
+    			resultType="kr.nshare.system.service.SystemVO">
+		    	select 
+						a.*
+						,b.title
+						, AES_DECRYPT(UNHEX(c.name), (select secret_key from i_configuration where code=1)) as name
+						,c.userid
+				from i_training_service_log as a, i_training_service as b , i_member as c 
+				where 
+					a.service_code=b.code
+				and 
+					b.uc = c.code
+				and
+					a.sdate between concat(#{searchBgnDe},' 00:00:00') and concat(#{searchEndDe},'23:59:59')					
+				<if test="searchCondition != '' and searchCondition!=null">
+					<if test="searchCondition=='userid'">
+							and c.userid like concat(#{searchKeyword},'%')
+					</if>
+					<if test="searchCondition=='title'">
+							and b.title like concat('%',#{searchKeyword},'%')
+					</if>
+				</if>
+				<if test="lev!= 'admin'">		
+					and
+						c.userid = #{userid}
+				</if>
+				order by a.code desc limit #{startRowNum}, ${pageSize}
+    </select>
+    
+    <select id="selectServiceLogListCnt" 
+    			parameterType="kr.nshare.system.service.SystemVO" 
+    			resultType="java.lang.Integer">
+		    	select 
+						count(*)
+				from i_training_service_log as a, i_training_service as b , i_member as c 
+				where 
+					a.service_code=b.code
+				and 
+					b.uc = c.code
+				and
+					a.sdate between concat(#{searchBgnDe},' 00:00:00') and concat(#{searchEndDe},'23:59:59')					
+				<if test="searchCondition != '' and searchCondition!=null">
+					<if test="searchCondition=='userid'">
+							and c.userid like concat(#{searchKeyword},'%')
+					</if>
+					<if test="searchCondition=='title'">
+							and b.title like concat('%',#{searchKeyword},'%')
+					</if>
+				</if>
+				<if test="lev!= 'admin'">		
+					and
+						c.userid = #{userid}
+				</if>
+    </select>
+ 	
+ 	<select id="selectServiceSettingInfoByUserID" 
+    			parameterType="kr.nshare.system.service.SystemVO" 
+    			resultType="kr.nshare.system.service.SystemVO">
+		    	select 
+		    		a.*
+				from  i_training_service as a , i_member as b
+				where 
+					a.uc=b.code
+				and
+					b.userid = #{userid}
+				<if test="code == '' or code == null">
+					and 
+						a.service_use = 'Y'
+				</if>				
+				<if test="code != '' and code !=null">
+					and
+						a.code = #{code}
+				</if>				
+    </select>
+    
+    <!-- 현재 훈련  서비스설정에 대한 훈련 진행한 발송인원 수 조회  -->
+    <select id="selectTrainingUserCntByServiceSettingCode" parameterType="kr.nshare.system.service.SystemVO" resultType="kr.nshare.system.service.SystemVO">
+    	select 
+			count(service_type) as sended_user_cnt
+			,service_type
+		from	(select 
+						b.email
+						,a.service_type
+			    from  i_training as a, i_training_user as b
+				where 
+					a.service_setting_code = #{service_setting_code}
+				and
+					a.code = b.training_code
+				and 
+					(a.service_type = 'real' or  a.service_type = 'test')
+				<if test="training_code == '' or training_code == null">
+					and 
+						a.status != 'ready' 
+				</if>		
+				<if test="training_code != '' and  training_code != null">
+					and 
+						(a.status != 'ready' or a.code = #{training_code} ) 
+				</if>		
+				group by email,service_type	
+		) as ta
+		group by  service_type
+    </select>      	
+</mapper>
